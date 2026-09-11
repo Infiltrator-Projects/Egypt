@@ -4,16 +4,16 @@ LDLIBS ?= -lX11
 
 TARGET := build/egypt
 SOURCES := src/egypt.cpp
-MENU_B64 := assets/menu.erle.b64
+MENU_PARTS := assets/menu96_0a1.b64 assets/menu96_0a2.b64 assets/menu96_0b.b64 assets/menu96_1.b64 assets/menu96_2.b64
 MENU_ASSET := assets/menu.erle
 
 .PHONY: all clean run
 
 all: $(TARGET)
 
-$(MENU_ASSET): $(MENU_B64)
+$(MENU_ASSET): $(MENU_PARTS)
 	@printf 'Preparing Egypt menu artwork...\n'
-	@base64 -d $(MENU_B64) > $(MENU_ASSET).tmp
+	@cat $(MENU_PARTS) | base64 -d > $(MENU_ASSET).tmp
 	@mv $(MENU_ASSET).tmp $(MENU_ASSET)
 
 $(TARGET): $(SOURCES) $(MENU_ASSET)
