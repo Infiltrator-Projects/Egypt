@@ -2,49 +2,53 @@
 
 ## First executable milestone
 
-The first development goal is deliberately visual and small:
+The first goal is deliberately small and visual:
 
-> **Launch Egypt and reach a recognisable game start screen, then press New Game and enter a city screen even if the simulation does almost nothing.**
+> **Launch Egypt, reach a recognisable start screen, press New Game, and enter a primitive city screen even though the simulation does almost nothing yet.**
 
-This creates immediate visible progress and a stable shell into which the simulation can grow.
+## Implementation
 
-## Bootstrap technology
+Egypt now begins as a native C++20 application rather than using a third-party game engine.
 
-For this first executable slice:
+The first shell contains:
 
-- **Engine:** Godot 4.7.2 stable
-- **Language:** GDScript
-- **Renderer:** GL Compatibility during bootstrap
-- **Logical viewport:** 1280 × 720, stretchable
-- **Platforms:** desktop-first; Linux is the immediate development target, while Windows remains an intended export target
+- our own application/game state loop;
+- our own CPU framebuffer;
+- our own rectangle, line and triangle drawing;
+- our own 5×7 bitmap font renderer;
+- our own menu button hit-testing and screen state;
+- a native Linux X11 presentation/input layer;
+- an Egyptian-themed start screen drawn entirely from our code;
+- New Game → primitive Nile/floodplain/desert city screen;
+- disabled Continue button until save support exists;
+- Settings placeholder;
+- Quit and Escape handling;
+- a basic HUD with population, treasury, year and flood forecast placeholders.
 
-Godot/GDScript is the initial implementation stack because it provides fast visual iteration. The core simulation must remain separated from presentation so rendering/UI code never becomes the authoritative game state.
+No Godot project, GDScript, Godot scene or Godot runtime is part of the active implementation.
 
-## Milestone 0.1 — Start screen
+## Build
 
-Implemented in the first code commit:
+On a Linux development system with a C++20 compiler and X11 development headers available:
 
-- project launches directly to an Egypt main menu;
-- original placeholder Egyptian visual treatment drawn entirely in code;
-- New Game opens a first city/map placeholder;
-- Continue exists but is disabled until save support exists;
-- Settings acknowledges the action but is intentionally not implemented yet;
-- Quit exits the game;
-- Escape returns from the city placeholder to the main menu;
-- city placeholder exposes population, treasury, year and flood-forecast locations in the HUD;
-- no external/copyrighted Pharaoh assets are required.
+```text
+make
+./build/egypt
+```
 
-## Next smallest goal
+The build does not package a third-party game engine or runtime with Egypt. The current Linux executable uses the display facilities already installed on the host system.
 
-Do not add the economy yet.
+## Next smallest milestone
 
-The next milestone should make the city screen interactive enough to feel like a builder:
+Do not add the economy yet. Make the city screen feel like a builder first:
 
-1. camera pan/zoom;
-2. visible build grid;
-3. road tool;
+1. camera pan and zoom;
+2. explicit world/map data separate from rendering;
+3. road placement tool;
 4. place/remove road cells;
 5. inspect a cell;
-6. keep the map representation in simulation state rather than the renderer.
+6. then add housing.
 
-Once road placement feels good, housing and the clay → pottery chain can be layered onto it.
+After that, build the first complete economic proof:
+
+**clay pit → clay transport → potter → pottery → market/storage → house**.
