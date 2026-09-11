@@ -3,7 +3,7 @@ CXXFLAGS ?= -std=c++20 -O2 -Wall -Wextra -Wpedantic
 LDLIBS ?= -lX11
 
 TARGET := build/egypt
-SOURCES := src/main.cpp
+SOURCES := src/egypt.cpp
 
 .PHONY: all clean run
 
