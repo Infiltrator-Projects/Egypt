@@ -12,6 +12,27 @@ The player should be able to **watch the city work**.
 
 Resources should move through real production chains. Workers and service providers should physically travel. Markets should collect and distribute goods. Houses should evolve because their residents actually receive food, services and manufactured goods. The Nile should shape the economy. Monument construction should be a long, visible civic undertaking rather than a progress bar.
 
+## Current implementation
+
+Egypt now has its first native executable shell.
+
+- **Language:** C++20
+- **Game engine:** our own
+- **Renderer:** our own CPU framebuffer and drawing primitives
+- **UI/font:** our own menu hit-testing and bitmap font renderer
+- **Linux platform layer:** native X11 window/input/presentation path
+- **First screen:** Egyptian-themed main menu
+- **New Game:** enters a primitive Nile/floodplain/desert city screen
+
+The current shell deliberately contains almost no simulation. Its purpose is to establish our executable, rendering, input and screen-state foundations before city systems are added.
+
+On a Linux development machine with a C++20 compiler and X11 development headers available:
+
+```text
+make
+./build/egypt
+```
+
 ## Initial playable target
 
 **Place road → establish housing → place clay pit → move clay → make pottery → store/distribute pottery → deliver pottery to houses → houses improve.**
@@ -24,26 +45,23 @@ The slice is not considered complete unless the player can also break any link i
 
 The repository documentation is deliberately split by purpose so later development does not depend on chat history or accidentally turn a proposal into a project requirement.
 
-- [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md) — living game-design vision: what Egypt is intended to become and how its major systems should interact.
-- [`docs/DESIGN_DECISIONS.md`](docs/DESIGN_DECISIONS.md) — authoritative decision register distinguishing **DECIDED**, **DIRECTION**, **PROPOSED**, **TBD** and **REJECTED** ideas.
-- [`docs/PHARAOH_REFERENCE.md`](docs/PHARAOH_REFERENCE.md) — detailed reference bible for *Pharaoh*/*Cleopatra*: housing, Nile, farming, industry, markets, walkers, labour, civic systems, religion, monuments, military, campaign, UI, strengths, weaknesses and lessons for Egypt.
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) — staged development path from technology selection through the first pottery vertical slice, Nile agriculture, labour, service agents, monuments, trade and campaign persistence.
+- [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md) — living game-design vision.
+- [`docs/DESIGN_DECISIONS.md`](docs/DESIGN_DECISIONS.md) — authoritative decision register.
+- [`docs/PHARAOH_REFERENCE.md`](docs/PHARAOH_REFERENCE.md) — detailed *Pharaoh*/*Cleopatra* reference bible.
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — staged development roadmap.
+- [`docs/TECHNICAL_DECISIONS.md`](docs/TECHNICAL_DECISIONS.md) — implementation decisions and rejected directions.
+- [`docs/BOOTSTRAP.md`](docs/BOOTSTRAP.md) — current native executable milestone.
 
-## Design status
-
-The broad simulation philosophy is established, but a number of foundational technical choices remain deliberately **TBD**, including:
+## Still deliberately TBD
 
 - final game title;
-- programming language;
-- engine vs custom engine;
-- 2D/isometric/2.5D/3D presentation;
+- final 2D/isometric/2.5D/3D presentation;
 - exact citizen simulation granularity;
 - final map scale;
 - save/modding formats;
 - final combat design;
-- complete resource/building/content catalogue.
-
-Those choices should be made deliberately rather than becoming accidental architecture constraints.
+- complete resource/building/content catalogue;
+- Windows platform layer details.
 
 ## Foundational principles already established
 
