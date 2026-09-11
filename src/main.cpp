@@ -5,6 +5,7 @@
 #include <array>
 #include <cstdint>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -20,6 +21,69 @@ struct Rect {
         return px >= x && py >= y && px < x + w && py < y + h;
     }
 };
+
+struct ImageAsset {
+    int width = 0;
+    int height = 0;
+    std::vector<Color> pixels;
+
+    bool valid() const {
+        return width > 0 && height > 0 && pixels.size() == static_cast<std::size_t>(width * height);
+    }
+};
+
+ImageAsset load_erle(const std::string& path) {
+    std::ifstream file(path, std::ios::binary);
+    if (!file) return {};
+
+    std::array<unsigned char, 8> header{};
+    file.read(reinterpret_cast<char*>(header.data()), static_cast<std::streamsize>(header.size()));
+    if (!file || header[0] != 'E' || header[1] != 'R' || header[2] != 'L' || header[3] != 'E') return {};
+
+    const int width = static_cast<int>(header[4] | (header[5] << 8));
+    const int height = static_cast<int>(header[6] | (header[7] << 8));
+    if (width <= 0 || height <= 0 || width > 8192 || height > 8192) return {};
+
+    std::array<Color, 256> palette{};
+    for (Color& color : palette) {
+        unsigned char rgb[3]{};
+        file.read(reinterpret_cast<char*>(rgb), 3);
+        if (!file) return {};
+        color = Color{rgb[0], rgb[1], rgb[2]};
+    }
+
+    ImageAsset image;
+    image.width = width;
+    image.height = height;
+    image.pixels.reserve(static_cast<std::size_t>(width * height));
+    const std::size_t needed = static_cast<std::size_t>(width * height);
+
+    while (image.pixels.size() < needed && file) {
+        unsigned char command = 0;
+        file.read(reinterpret_cast<char*>(&command), 1);
+        if (!file || command == 0) return {};
+
+        if ((command & 0x80U) != 0U) {
+            const std::size_t count = command & 0x7FU;
+            unsigned char index = 0;
+            file.read(reinterpret_cast<char*>(&index), 1);
+            if (!file || image.pixels.size() + count > needed) return {};
+            image.pixels.insert(image.pixels.end(), count, palette[index]);
+        } else {
+            const std::size_t count = command;
+            if (image.pixels.size() + count > needed) return {};
+            for (std::size_t i = 0; i < count; ++i) {
+                unsigned char index = 0;
+                file.read(reinterpret_cast<char*>(&index), 1);
+                if (!file) return {};
+                image.pixels.push_back(palette[index]);
+            }
+        }
+    }
+
+    if (image.pixels.size() != needed) return {};
+    return image;
+}
 
 enum class Screen { Menu, Game };
 
@@ -52,6 +116,23 @@ public:
         for (int y = y0; y < y1; ++y)
             for (int x = x0; x < x1; ++x)
                 pixel(x, y, c);
+    }
+
+    void blend_rect(Rect r, Color c, std::uint8_t alpha) {
+        const int x0 = std::max(0, r.x);
+        const int y0 = std::max(0, r.y);
+        const int x1 = std::min(width_, r.x + r.w);
+        const int y1 = std::min(height_, r.y + r.h);
+        const unsigned a = alpha;
+        const unsigned ia = 255U - a;
+        for (int y = y0; y < y1; ++y) {
+            for (int x = x0; x < x1; ++x) {
+                Color& dst = pixels_[static_cast<std::size_t>(y * width_ + x)];
+                dst.r = static_cast<std::uint8_t>((dst.r * ia + c.r * a) / 255U);
+                dst.g = static_cast<std::uint8_t>((dst.g * ia + c.g * a) / 255U);
+                dst.b = static_cast<std::uint8_t>((dst.b * ia + c.b * a) / 255U);
+            }
+        }
     }
 
     void rect(Rect r, Color c, int thickness = 1) {
@@ -89,6 +170,30 @@ public:
                 const int e2 = edge(x2, y2, x0, y0, x, y);
                 if ((e0 >= 0 && e1 >= 0 && e2 >= 0) || (e0 <= 0 && e1 <= 0 && e2 <= 0))
                     pixel(x, y, c);
+            }
+        }
+    }
+
+    void blit_cover(const ImageAsset& image) {
+        if (!image.valid()) return;
+
+        const std::int64_t lhs = static_cast<std::int64_t>(width_) * image.height;
+        const std::int64_t rhs = static_cast<std::int64_t>(height_) * image.width;
+        int draw_w = width_;
+        int draw_h = height_;
+        if (lhs > rhs) {
+            draw_h = static_cast<int>((static_cast<std::int64_t>(width_) * image.height + image.width - 1) / image.width);
+        } else {
+            draw_w = static_cast<int>((static_cast<std::int64_t>(height_) * image.width + image.height - 1) / image.height);
+        }
+        const int offset_x = (width_ - draw_w) / 2;
+        const int offset_y = (height_ - draw_h) / 2;
+
+        for (int y = 0; y < height_; ++y) {
+            const int sy = std::clamp(static_cast<int>((static_cast<std::int64_t>(y - offset_y) * image.height) / draw_h), 0, image.height - 1);
+            for (int x = 0; x < width_; ++x) {
+                const int sx = std::clamp(static_cast<int>((static_cast<std::int64_t>(x - offset_x) * image.width) / draw_w), 0, image.width - 1);
+                pixels_[static_cast<std::size_t>(y * width_ + x)] = image.pixels[static_cast<std::size_t>(sy * image.width + sx)];
             }
         }
     }
@@ -134,7 +239,10 @@ void draw_text(Framebuffer& fb, int x, int y, const std::string& text, Color c, 
 
 class Game {
 public:
-    explicit Game(Framebuffer& fb) : fb_(fb) {}
+    explicit Game(Framebuffer& fb) : fb_(fb), menu_art_(load_erle("assets/menu.erle")) {
+        if (!menu_art_.valid())
+            std::cerr << "Egypt: assets/menu.erle not found; using fallback background\n";
+    }
 
     bool running() const { return running_; }
     bool dirty() const { return dirty_; }
@@ -183,6 +291,7 @@ public:
 
 private:
     Framebuffer& fb_;
+    ImageAsset menu_art_;
     Screen screen_ = Screen::Menu;
     bool running_ = true;
     bool dirty_ = true;
@@ -193,7 +302,7 @@ private:
 
     const Color night{23,18,15}, sand{185,131,71}, sand_dark{112,71,44};
     const Color gold{217,177,95}, pale{242,215,154}, nile{45,113,135};
-    const Color fertile{102,119,78}, panel{42,31,24}, panel_hi{70,50,35};
+    const Color fertile{102,119,78}, panel{26,20,16}, panel_hi{55,40,27};
 
     std::array<Rect, 4> menu_buttons() const {
         const int x = 72, y = 300, w = 340, h = 50, gap = 12;
@@ -210,24 +319,29 @@ private:
     }
 
     void button(Rect r, const std::string& label, bool enabled, bool hovered = false) {
-        fb_.fill_rect(r, hovered && enabled ? panel_hi : panel);
+        fb_.blend_rect(r, hovered && enabled ? panel_hi : panel, hovered && enabled ? 225 : 205);
         fb_.rect(r, enabled ? gold : Color{90,78,65}, 2);
         draw_text(fb_, r.x + 18, r.y + 16, label, enabled ? pale : Color{115,105,92}, 2);
     }
 
-    void draw_menu() {
+    void draw_menu_fallback() {
         const int w = fb_.width(), h = fb_.height();
         fb_.clear(night);
         fb_.fill_rect({0, h * 54 / 100, w, h * 46 / 100}, sand_dark);
         fb_.fill_rect({0, h * 68 / 100, w, h * 32 / 100}, sand);
-
         const int rx = w * 72 / 100;
         const int rw = std::max(90, w * 10 / 100);
         fb_.triangle(rx - rw / 4, h * 44 / 100, rx + rw / 2, h * 44 / 100, rx - rw / 2, h, nile);
         fb_.triangle(w * 5 / 100, h * 68 / 100, w * 12 / 100, h * 43 / 100, w * 20 / 100, h * 68 / 100, {59,43,34});
         fb_.triangle(w * 19 / 100, h * 68 / 100, w * 27 / 100, h * 50 / 100, w * 34 / 100, h * 68 / 100, {62,45,35});
         fb_.triangle(w * 31 / 100, h * 68 / 100, w * 38 / 100, h * 55 / 100, w * 45 / 100, h * 68 / 100, {66,47,36});
+    }
 
+    void draw_menu() {
+        if (menu_art_.valid()) fb_.blit_cover(menu_art_);
+        else draw_menu_fallback();
+
+        fb_.blend_rect({44, 46, 492, 548}, {10,8,7}, 78);
         draw_text(fb_, 72, 78, "EGYPT", gold, 8);
         draw_text(fb_, 74, 155, "A LIVING CITY ON THE NILE", pale, 3);
         fb_.fill_rect({72, 206, 420, 2}, gold);
