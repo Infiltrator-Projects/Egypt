@@ -113,3 +113,24 @@ Required baseline controls:
 - camera input must remain responsive independently of the simulation tick rate.
 
 The map should visually read as continuous terrain rather than exposed isometric graph paper. Logical tiles remain authoritative, but normal play should not show strong tile borders except for selection, placement previews or overlays.
+
+## TD-008 — The game is not a window-system game
+
+**Date:** 2026-09-12
+
+**Status:** DECIDED / ENFORCED
+
+Egypt's simulation, renderer, framebuffer, camera, UI and input model are platform-neutral game code. They must not include or expose X11, Wayland, Win32, Cocoa or any other operating-system/window-system API types.
+
+Platform code exists only at the outer host boundary. The host adapter is responsible for obtaining a display surface, translating native keyboard/mouse events into Egypt's own `Key` and `MouseButton` values, presenting Egypt's framebuffer, and passing resize/quit requests across the boundary.
+
+The current Linux development adapter happens to be X11, but X11 is not part of the engine architecture. It lives only in `src/platform/x11_backend.cpp` and can be replaced by another host adapter without changing the game, simulation or renderer.
+
+Build rules enforce this boundary:
+
+- `EGYPT_HOST_BACKEND=x11` builds the current Linux desktop host adapter;
+- `EGYPT_HOST_BACKEND=none` configures and builds the platform-neutral core with no X11 requirement at all;
+- `egypt-game-core-compile` includes the complete `Game`/renderer/UI headers without linking or including X11;
+- CI has a dedicated no-window-system job so platform APIs leaking back into game code break the build immediately.
+
+A future Linux fullscreen/direct-display adapter may use DRM/KMS and input devices directly; Windows can use its own native adapter. Those choices must remain implementation details outside the game core.
