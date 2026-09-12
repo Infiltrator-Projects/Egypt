@@ -93,3 +93,23 @@ Egypt must use the shared Infiltratr Common library where Common already provide
 Egypt currently pins Common 1.16.0. The first simulation loop uses Common's exact fixed-step scheduler rather than inventing a private accumulator.
 
 When outside projects are researched, their code is reference material unless Shannon deliberately approves importing a compatible dependency. We may study architecture, algorithms and design patterns, then implement the required behaviour in Egypt/Common. We do not silently add an engine, runtime or third-party asset package merely because it would be convenient.
+
+## TD-007 — Pharaoh-style camera and display controls are core UX
+
+**Date:** 2026-09-12
+
+**Status:** DECIDED
+
+The city view must be continuously navigable. Camera movement is part of the core interaction model, not a debug convenience.
+
+Required baseline controls:
+
+- edge scrolling with configurable speed;
+- right- or middle-mouse drag panning;
+- mouse-wheel zoom;
+- keyboard pan using arrows and WASD;
+- a recenter command;
+- display settings with selectable window resolutions;
+- camera input must remain responsive independently of the simulation tick rate.
+
+The map should visually read as continuous terrain rather than exposed isometric graph paper. Logical tiles remain authoritative, but normal play should not show strong tile borders except for selection, placement previews or overlays.
