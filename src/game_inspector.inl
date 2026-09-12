@@ -4,28 +4,55 @@
         if(!world_.in_bounds(selected_x_,selected_y_)){
             text(fb_,info.x+14,info.y+48,"CLICK A TILE TO INSPECT",pale,2);return;
         }
-        const Tile& tile=world_.tile(selected_x_,selected_y_);
+
+        int inspect_x=selected_x_,inspect_y=selected_y_;
+        const Tile& selected=world_.tile(selected_x_,selected_y_);
+        if(selected.structure==Structure::House){
+            const int ax=world_.residence_anchor_x(selected_x_,selected_y_);
+            const int ay=world_.residence_anchor_y(selected_x_,selected_y_);
+            if(ax>=0&&ay>=0){inspect_x=ax;inspect_y=ay;}
+        }
+        const Tile& tile=world_.tile(inspect_x,inspect_y);
+
         text(fb_,info.x+14,info.y+12,"TILE "+std::to_string(selected_x_)+","+std::to_string(selected_y_),pale,2);
-        text(fb_,info.x+14,info.y+34,World::terrain_name(tile.terrain),gold,2);
-        text(fb_,info.x+170,info.y+34,World::structure_name(tile.structure),gold,2);
-        if(tile.structure==Structure::House){
-            const int capacity=world_.house_capacity(selected_x_,selected_y_);
-            const int free_workers=std::max(0,int(tile.population)-int(tile.employed));
-            text(fb_,info.x+14,info.y+62,World::housing_name(tile.housing_level),gold,3);
-            text(fb_,info.x+14,info.y+94,"OCCUPANTS "+std::to_string(tile.population)+" / "+std::to_string(capacity)+"   FREE SPACE "+std::to_string(std::max(0,capacity-int(tile.population))),pale,2);
-            text(fb_,info.x+14,info.y+116,"EMPLOYED "+std::to_string(tile.employed)+"   FREE LABOUR "+std::to_string(free_workers),pale,2);
-            text(fb_,info.x+14,info.y+138,"FOOD "+std::to_string(tile.food_stock)+"   POTTERY "+std::to_string(tile.pottery_stock),pale,2);
-            text(fb_,info.x+14,info.y+160,std::string("ROAD ")+(world_.has_road_access(selected_x_,selected_y_)?"YES":"NO")+"   WATER "+(world_.has_well_service(selected_x_,selected_y_)?"YES":"NO")+"   DES "+std::to_string(world_.house_desirability(selected_x_,selected_y_)),pale,2);
-            text(fb_,info.x+14,info.y+190,"NEXT EVOLUTION",gold,2);
-            text(fb_,info.x+14,info.y+212,world_.house_evolution_status(selected_x_,selected_y_),pale,1);
+        text(fb_,info.x+14,info.y+34,World::terrain_name(selected.terrain),gold,2);
+        text(fb_,info.x+170,info.y+34,World::structure_name(selected.structure),gold,2);
+
+        if(selected.structure==Structure::House){
+            const int capacity=world_.house_capacity(inspect_x,inspect_y);
+            const int occupants=world_.residence_population(inspect_x,inspect_y);
+            const int employed=world_.residence_employed(inspect_x,inspect_y);
+            const int free_workers=std::max(0,occupants-employed);
+            const int footprint=world_.residence_tiles(inspect_x,inspect_y);
+            text(fb_,info.x+14,info.y+58,world_.residence_name(inspect_x,inspect_y),gold,3);
+            if(footprint>1){
+                text(fb_,info.x+14,info.y+84,
+                    "2X2 RESIDENCE  4 TILES  ANCHOR "+std::to_string(inspect_x)+","+std::to_string(inspect_y),pale,1);
+            }else{
+                text(fb_,info.x+14,info.y+84,"SINGLE-TILE RESIDENCE",pale,1);
+            }
+            text(fb_,info.x+14,info.y+104,
+                "OCCUPANTS "+std::to_string(occupants)+" / "+std::to_string(capacity)+
+                "   FREE SPACE "+std::to_string(std::max(0,capacity-occupants)),pale,2);
+            text(fb_,info.x+14,info.y+126,
+                "EMPLOYED "+std::to_string(employed)+"   FREE LABOUR "+std::to_string(free_workers),pale,2);
+            text(fb_,info.x+14,info.y+148,
+                "FOOD "+std::to_string(world_.residence_food(inspect_x,inspect_y))+
+                "   POTTERY "+std::to_string(world_.residence_pottery(inspect_x,inspect_y)),pale,2);
+            text(fb_,info.x+14,info.y+170,
+                std::string("ROAD ")+(world_.has_road_access(inspect_x,inspect_y)?"YES":"NO")+
+                "   WATER "+(world_.has_well_service(inspect_x,inspect_y)?"YES":"NO")+
+                "   DES "+std::to_string(world_.house_desirability(inspect_x,inspect_y)),pale,2);
+            text(fb_,info.x+14,info.y+194,"NEXT EVOLUTION",gold,2);
+            text(fb_,info.x+14,info.y+214,world_.house_evolution_status(inspect_x,inspect_y),pale,1);
         }else if(tile.structure==Structure::Road){
-            text(fb_,info.x+14,info.y+78,World::road_level_name(world_.road_level(selected_x_,selected_y_)),gold,3);
+            text(fb_,info.x+14,info.y+78,World::road_level_name(world_.road_level(inspect_x,inspect_y)),gold,3);
             text(fb_,info.x+14,info.y+116,"RECORDED TRAFFIC "+std::to_string(tile.road_traffic),pale,2);
             text(fb_,info.x+14,info.y+146,"REAL WALKERS AND CARTS IMPROVE THIS ROUTE",pale,1);
-        }else if(world_.worker_capacity(selected_x_,selected_y_)>0){
-            const int assigned=world_.workers_assigned(selected_x_,selected_y_);
-            const int active=world_.workers_active(selected_x_,selected_y_);
-            const int capacity=world_.worker_capacity(selected_x_,selected_y_);
+        }else if(world_.worker_capacity(inspect_x,inspect_y)>0){
+            const int assigned=world_.workers_assigned(inspect_x,inspect_y);
+            const int active=world_.workers_active(inspect_x,inspect_y);
+            const int capacity=world_.worker_capacity(inspect_x,inspect_y);
             text(fb_,info.x+14,info.y+66,"STAFF "+std::to_string(assigned)+" / "+std::to_string(capacity)+"   AT WORK "+std::to_string(active),gold,2);
             if(assigned==0)text(fb_,info.x+14,info.y+92,"WAITING FOR RESIDENT LABOUR",{226,143,91},2);
             else if(active==0)text(fb_,info.x+14,info.y+92,"STAFF ARE COMMUTING OR AT HOME",pale,1);

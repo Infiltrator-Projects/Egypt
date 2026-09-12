@@ -34,23 +34,18 @@
         fb_.quad(bl,bb,tb,tl,left); fb_.quad(bb,br,tr,tb,right); fb_.quad(tt,tr,tb,tl,top);
     }
 
-    bool high_house(int x,int y) const {
-        return world_.in_bounds(x,y) && world_.tile(x,y).structure==Structure::House && world_.tile(x,y).housing_level>=2;
-    }
-
     bool merged_anchor(int x,int y) const {
-        if (!high_house(x,y)||!high_house(x+1,y)||!high_house(x,y+1)||!high_house(x+1,y+1)) return false;
-        const bool blocked_left = high_house(x-1,y) && high_house(x-1,y+1);
-        const bool blocked_up = high_house(x,y-1) && high_house(x+1,y-1);
-        return !blocked_left && !blocked_up;
+        return world_.in_bounds(x,y) &&
+               world_.tile(x,y).structure==Structure::House &&
+               world_.is_residence_anchor(x,y) &&
+               world_.residence_tiles(x,y)>=4;
     }
 
     bool merged_part(int x,int y) const {
-        for(int ay=y-1;ay<=y;++ay) for(int ax=x-1;ax<=x;++ax) {
-            if(!world_.in_bounds(ax,ay)) continue;
-            if(merged_anchor(ax,ay) && !(ax==x&&ay==y) && x>=ax&&x<=ax+1&&y>=ay&&y<=ay+1) return true;
-        }
-        return false;
+        return world_.in_bounds(x,y) &&
+               world_.tile(x,y).structure==Structure::House &&
+               !world_.is_residence_anchor(x,y) &&
+               world_.residence_tiles(x,y)>=4;
     }
 
     void draw_house(const Tile& tile, IsoPoint p, int tw, int th) {
@@ -84,12 +79,22 @@
         const IsoPoint a=cam_.project(x,y);
         const IsoPoint b=cam_.project(x+1,y+1);
         IsoPoint center{(a.x+b.x)/2,(a.y+b.y)/2+th/2};
-        draw_block(center,tw*17/10,th*17/10,42,{235,209,156},{160,100,62},{192,122,68});
+        const Tile& residence=world_.tile(x,y);
+        const bool courtyard=residence.housing_level>=3;
+        const Color top=courtyard?Color{242,220,174}:Color{235,209,156};
+        const Color left=courtyard?Color{171,108,65}:Color{160,100,62};
+        const Color right=courtyard?Color{204,134,76}:Color{192,122,68};
+        draw_block(center,tw*17/10,th*17/10,courtyard?48:42,top,left,right);
         fb_.fill_rect({center.x-8,center.y-31,16,22},{63,44,32});
         fb_.fill_rect({center.x-30,center.y-38,8,8},{54,101,119});
         fb_.fill_rect({center.x+22,center.y-38,8,8},{54,101,119});
         fb_.fill_rect({center.x-29,center.y-52,58,6},{239,216,167});
-        fb_.fill_rect({center.x-3,center.y-61,6,9},{48,108,65});
+        if(courtyard){
+            fb_.diamond({center.x,center.y-12},tw/3,th/3,{56,126,148},{233,211,155});
+            fb_.fill_rect({center.x-3,center.y-65,6,13},{48,108,65});
+        }else{
+            fb_.fill_rect({center.x-3,center.y-61,6,9},{48,108,65});
+        }
     }
 
     void draw_farm(IsoPoint p,int tw,int th) {

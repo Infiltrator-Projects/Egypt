@@ -160,6 +160,37 @@ int main() {
     const char* status = world.house_evolution_status(30, 13);
     if (status == nullptr || *status == '\0') fail("house diagnostic status missing");
 
+    // Four mature neighbouring houses must become one authoritative residence,
+    // not merely a renderer-side visual merge.
+    constexpr int merge_x = 10;
+    constexpr int merge_y = 20;
+    for (int dy = 0; dy < 2; ++dy) {
+        for (int dx = 0; dx < 2; ++dx) {
+            if (!world.place(Structure::House, merge_x + dx, merge_y + dy)) fail("merge house placement failed");
+            Tile& h = world.tile(merge_x + dx, merge_y + dy);
+            h.housing_level = 2;
+            h.housing_service_ticks = 12;
+            h.population = 5;
+            h.food_stock = 3;
+        }
+    }
+    world.tick();
+    if (!world.is_residence_anchor(merge_x, merge_y)) fail("merged residence anchor missing");
+    if (world.residence_tiles(merge_x + 1, merge_y + 1) != 4) fail("merged residence footprint not authoritative");
+    if (world.residence_anchor_x(merge_x + 1, merge_y + 1) != merge_x ||
+        world.residence_anchor_y(merge_x + 1, merge_y + 1) != merge_y) {
+        fail("merged residence member did not resolve to anchor");
+    }
+    if (world.residence_population(merge_x, merge_y) != 20) fail("merged residence lost occupants");
+    if (world.house_capacity(merge_x, merge_y) <= 64) fail("merged residence did not gain compound capacity");
+    if (world.tile(merge_x + 1, merge_y).population != 0) fail("merged residence kept duplicate member population");
+    if (!world.bulldoze(merge_x + 1, merge_y + 1)) fail("merged residence bulldoze failed");
+    for (int dy = 0; dy < 2; ++dy) for (int dx = 0; dx < 2; ++dx) {
+        if (world.tile(merge_x + dx, merge_y + dy).structure != Structure::Empty) {
+            fail("bulldozing merged residence did not remove full footprint");
+        }
+    }
+
     for (int i = 0; i < 600; ++i) world.tick();
     if (world.year_bc() >= 3500) fail("simulation calendar did not advance years");
 

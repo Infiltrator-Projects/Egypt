@@ -53,6 +53,13 @@ struct Tile {
     std::uint16_t clay_stock = 0;
     std::uint16_t pottery_stock = 0;
     std::uint16_t road_traffic = 0;
+
+    // Houses use an authoritative residence identity. Ordinary houses point
+    // to themselves; every tile in a merged 2x2 residence points to the same
+    // anchor. Population, employment and household goods live on the anchor.
+    std::int16_t residence_anchor_x = -1;
+    std::int16_t residence_anchor_y = -1;
+    std::uint8_t residence_tiles = 1;
 };
 
 struct ImmigrantAgent {
@@ -113,6 +120,17 @@ public:
     [[nodiscard]] bool has_road_access(int x, int y) const;
     [[nodiscard]] bool road_connected(int ax, int ay, int bx, int by) const;
     [[nodiscard]] bool has_well_service(int x, int y) const;
+
+    [[nodiscard]] int residence_anchor_x(int x, int y) const;
+    [[nodiscard]] int residence_anchor_y(int x, int y) const;
+    [[nodiscard]] bool is_residence_anchor(int x, int y) const;
+    [[nodiscard]] int residence_tiles(int x, int y) const;
+    [[nodiscard]] int residence_population(int x, int y) const;
+    [[nodiscard]] int residence_employed(int x, int y) const;
+    [[nodiscard]] int residence_food(int x, int y) const;
+    [[nodiscard]] int residence_pottery(int x, int y) const;
+    [[nodiscard]] const char* residence_name(int x, int y) const;
+
     [[nodiscard]] int house_capacity(int x, int y) const;
     [[nodiscard]] int house_desirability(int x, int y) const;
     [[nodiscard]] int road_level(int x, int y) const;
@@ -153,6 +171,14 @@ private:
     std::uint64_t ticks_ = 0;
 
     [[nodiscard]] std::size_t index(int x, int y) const;
+    [[nodiscard]] bool canonical_house(int x, int y, int& anchor_x, int& anchor_y) const;
+    [[nodiscard]] int base_house_capacity(std::uint8_t level) const;
+    [[nodiscard]] int residence_extent(int anchor_x, int anchor_y) const;
+    [[nodiscard]] bool can_merge_residence(int anchor_x, int anchor_y) const;
+    void merge_residence(int anchor_x, int anchor_y);
+    void update_residence_merges();
+    void sync_residence_members(int anchor_x, int anchor_y);
+
     [[nodiscard]] std::vector<std::size_t> adjacent_roads(int x, int y) const;
     [[nodiscard]] bool within_delivery_range(int ax, int ay, int bx, int by) const;
     [[nodiscard]] std::vector<std::size_t> road_path_between(int ax, int ay, int bx, int by) const;

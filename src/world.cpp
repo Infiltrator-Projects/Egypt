@@ -89,8 +89,194 @@ bool World::place(Structure s, int x, int y) {
     t = {};
     t.terrain = terrain;
     t.structure = s;
+    if (s == Structure::House) {
+        t.residence_anchor_x = static_cast<std::int16_t>(x);
+        t.residence_anchor_y = static_cast<std::int16_t>(y);
+        t.residence_tiles = 1;
+    }
     treasury_ -= c;
     return true;
+}
+
+bool World::canonical_house(int x, int y, int& ax, int& ay) const {
+    if (!in_bounds(x, y) || tile(x, y).structure != Structure::House) return false;
+    const Tile& member = tile(x, y);
+    ax = member.residence_anchor_x >= 0 ? member.residence_anchor_x : x;
+    ay = member.residence_anchor_y >= 0 ? member.residence_anchor_y : y;
+    if (!in_bounds(ax, ay) || tile(ax, ay).structure != Structure::House) {
+        ax = x;
+        ay = y;
+    }
+    return true;
+}
+
+int World::residence_anchor_x(int x, int y) const {
+    int ax = -1, ay = -1;
+    return canonical_house(x, y, ax, ay) ? ax : -1;
+}
+
+int World::residence_anchor_y(int x, int y) const {
+    int ax = -1, ay = -1;
+    return canonical_house(x, y, ax, ay) ? ay : -1;
+}
+
+bool World::is_residence_anchor(int x, int y) const {
+    int ax = -1, ay = -1;
+    return canonical_house(x, y, ax, ay) && ax == x && ay == y;
+}
+
+int World::residence_tiles(int x, int y) const {
+    int ax = -1, ay = -1;
+    if (!canonical_house(x, y, ax, ay)) return 0;
+    return std::max(1, static_cast<int>(tile(ax, ay).residence_tiles));
+}
+
+int World::residence_population(int x, int y) const {
+    int ax = -1, ay = -1;
+    return canonical_house(x, y, ax, ay) ? tile(ax, ay).population : 0;
+}
+
+int World::residence_employed(int x, int y) const {
+    int ax = -1, ay = -1;
+    return canonical_house(x, y, ax, ay) ? tile(ax, ay).employed : 0;
+}
+
+int World::residence_food(int x, int y) const {
+    int ax = -1, ay = -1;
+    return canonical_house(x, y, ax, ay) ? tile(ax, ay).food_stock : 0;
+}
+
+int World::residence_pottery(int x, int y) const {
+    int ax = -1, ay = -1;
+    return canonical_house(x, y, ax, ay) ? tile(ax, ay).pottery_stock : 0;
+}
+
+const char* World::residence_name(int x, int y) const {
+    int ax = -1, ay = -1;
+    if (!canonical_house(x, y, ax, ay)) return "NOT A RESIDENCE";
+    if (tile(ax, ay).residence_tiles >= 4) {
+        if (tile(ax, ay).housing_level >= 3) return "COURTYARD COMPOUND";
+        return "MERGED RESIDENCE";
+    }
+    return housing_name(tile(ax, ay).housing_level);
+}
+
+int World::base_house_capacity(std::uint8_t level) const {
+    switch (level) {
+        case 0: return 8;
+        case 1: return 12;
+        case 2: return 16;
+        default: return 20;
+    }
+}
+
+int World::residence_extent(int ax, int ay) const {
+    if (!in_bounds(ax, ay) || tile(ax, ay).structure != Structure::House) return 0;
+    return tile(ax, ay).residence_tiles >= 4 ? 2 : 1;
+}
+
+bool World::can_merge_residence(int ax, int ay) const {
+    if (!in_bounds(ax, ay) || !in_bounds(ax + 1, ay + 1)) return false;
+    for (int dy = 0; dy < 2; ++dy) {
+        for (int dx = 0; dx < 2; ++dx) {
+            const int x = ax + dx, y = ay + dy;
+            const Tile& h = tile(x, y);
+            if (h.structure != Structure::House || h.housing_level < 2) return false;
+            int hx = -1, hy = -1;
+            if (!canonical_house(x, y, hx, hy) || hx != x || hy != y || h.residence_tiles != 1) return false;
+        }
+    }
+    return true;
+}
+
+void World::sync_residence_members(int ax, int ay) {
+    if (!in_bounds(ax, ay) || tile(ax, ay).structure != Structure::House) return;
+    Tile& anchor = tile(ax, ay);
+    const int extent = residence_extent(ax, ay);
+    for (int dy = 0; dy < extent; ++dy) {
+        for (int dx = 0; dx < extent; ++dx) {
+            Tile& member = tile(ax + dx, ay + dy);
+            member.residence_anchor_x = static_cast<std::int16_t>(ax);
+            member.residence_anchor_y = static_cast<std::int16_t>(ay);
+            member.residence_tiles = anchor.residence_tiles;
+            member.housing_level = anchor.housing_level;
+            if (dx != 0 || dy != 0) {
+                member.population = 0;
+                member.employed = 0;
+                member.food_stock = 0;
+                member.pottery_stock = 0;
+                member.housing_service_ticks = 0;
+                member.housing_goods_ticks = 0;
+            }
+        }
+    }
+}
+
+void World::merge_residence(int ax, int ay) {
+    if (!can_merge_residence(ax, ay)) return;
+
+    int population = 0, employed = 0, food = 0, pottery = 0;
+    std::uint8_t level = std::numeric_limits<std::uint8_t>::max();
+    std::uint8_t service = std::numeric_limits<std::uint8_t>::max();
+    std::uint8_t goods = std::numeric_limits<std::uint8_t>::max();
+
+    for (int dy = 0; dy < 2; ++dy) {
+        for (int dx = 0; dx < 2; ++dx) {
+            const Tile& h = tile(ax + dx, ay + dy);
+            population += h.population;
+            employed += h.employed;
+            food += h.food_stock;
+            pottery += h.pottery_stock;
+            level = std::min(level, h.housing_level);
+            service = std::min(service, h.housing_service_ticks);
+            goods = std::min(goods, h.housing_goods_ticks);
+        }
+    }
+
+    Tile& anchor = tile(ax, ay);
+    anchor.residence_anchor_x = static_cast<std::int16_t>(ax);
+    anchor.residence_anchor_y = static_cast<std::int16_t>(ay);
+    anchor.residence_tiles = 4;
+    anchor.housing_level = level;
+    anchor.housing_service_ticks = service;
+    anchor.housing_goods_ticks = goods;
+    anchor.population = static_cast<std::uint8_t>(std::min(population, 255));
+    anchor.employed = static_cast<std::uint8_t>(std::min({employed, population, 255}));
+    anchor.food_stock = static_cast<std::uint16_t>(std::min(food, 48));
+    anchor.pottery_stock = static_cast<std::uint16_t>(std::min(pottery, 24));
+
+    sync_residence_members(ax, ay);
+
+    for (auto& worker : workers_) {
+        if (worker.home_x >= ax && worker.home_x <= ax + 1 &&
+            worker.home_y >= ay && worker.home_y <= ay + 1) {
+            worker.home_x = ax;
+            worker.home_y = ay;
+        }
+    }
+    for (auto& immigrant : immigrants_) {
+        if (immigrant.target_x >= ax && immigrant.target_x <= ax + 1 &&
+            immigrant.target_y >= ay && immigrant.target_y <= ay + 1) {
+            immigrant.target_x = ax;
+            immigrant.target_y = ay;
+        }
+    }
+    for (auto& goods_agent : goods_agents_) {
+        if (goods_agent.target_x >= ax && goods_agent.target_x <= ax + 1 &&
+            goods_agent.target_y >= ay && goods_agent.target_y <= ay + 1 &&
+            tile(goods_agent.target_x, goods_agent.target_y).structure == Structure::House) {
+            goods_agent.target_x = ax;
+            goods_agent.target_y = ay;
+        }
+    }
+}
+
+void World::update_residence_merges() {
+    for (int y = 0; y < kHeight - 1; ++y) {
+        for (int x = 0; x < kWidth - 1; ++x) {
+            if (can_merge_residence(x, y)) merge_residence(x, y);
+        }
+    }
 }
 
 bool World::is_workplace(Structure s) const {
@@ -136,56 +322,89 @@ int World::workers_active(int x, int y) const { return in_bounds(x, y) ? active_
 int World::worker_capacity(int x, int y) const { return in_bounds(x, y) ? desired_workers_for(tile(x, y).structure) : 0; }
 
 void World::release_worker(const WorkerAgent& worker) {
-    if (!in_bounds(worker.home_x, worker.home_y)) return;
-    Tile& home = tile(worker.home_x, worker.home_y);
-    if (home.structure == Structure::House && home.employed > 0) --home.employed;
+    int hx = worker.home_x, hy = worker.home_y;
+    int ax = -1, ay = -1;
+    if (canonical_house(hx, hy, ax, ay)) {
+        Tile& home = tile(ax, ay);
+        if (home.employed > 0) --home.employed;
+    }
 }
 
 bool World::bulldoze(int x, int y) {
     if (!in_bounds(x, y)) return false;
-    Tile& t = tile(x, y);
-    if (t.structure == Structure::Empty) return false;
+    if (tile(x, y).structure == Structure::Empty) return false;
+
+    int ax = x, ay = y;
+    int extent = 1;
+    const bool house = canonical_house(x, y, ax, ay);
+    if (house) extent = residence_extent(ax, ay);
+
+    auto belongs_to_target = [&](int tx, int ty) {
+        if (!house) return tx == x && ty == y;
+        return tx >= ax && tx < ax + extent && ty >= ay && ty < ay + extent;
+    };
 
     for (std::size_t i = 0; i < workers_.size();) {
         const WorkerAgent& w = workers_[i];
-        if ((w.home_x == x && w.home_y == y) || (w.job_x == x && w.job_y == y)) {
+        if (belongs_to_target(w.home_x, w.home_y) || (w.job_x == x && w.job_y == y)) {
             release_worker(w);
             workers_.erase(workers_.begin() + static_cast<std::ptrdiff_t>(i));
         } else ++i;
     }
     for (std::size_t i = 0; i < goods_agents_.size();) {
         const GoodsAgent& g = goods_agents_[i];
-        if ((g.source_x == x && g.source_y == y) || (g.target_x == x && g.target_y == y)) {
+        if ((g.source_x == x && g.source_y == y) || belongs_to_target(g.target_x, g.target_y)) {
             goods_agents_.erase(goods_agents_.begin() + static_cast<std::ptrdiff_t>(i));
         } else ++i;
     }
-
-    const Terrain terrain = t.terrain;
-    t = {};
-    t.terrain = terrain;
-    return true;
-}
-
-bool World::has_road_access(int x, int y) const {
-    static constexpr int dx[4] = {1, -1, 0, 0};
-    static constexpr int dy[4] = {0, 0, 1, -1};
-    for (int i = 0; i < 4; ++i) {
-        const int nx = x + dx[i], ny = y + dy[i];
-        if (in_bounds(nx, ny) && tile(nx, ny).structure == Structure::Road) return true;
+    for (std::size_t i = 0; i < immigrants_.size();) {
+        const ImmigrantAgent& a = immigrants_[i];
+        if (belongs_to_target(a.target_x, a.target_y)) immigrants_.erase(immigrants_.begin() + static_cast<std::ptrdiff_t>(i));
+        else ++i;
     }
-    return false;
+
+    if (house) {
+        for (int dy = 0; dy < extent; ++dy) {
+            for (int dx = 0; dx < extent; ++dx) {
+                Tile& t = tile(ax + dx, ay + dy);
+                const Terrain terrain = t.terrain;
+                t = {};
+                t.terrain = terrain;
+            }
+        }
+    } else {
+        Tile& t = tile(x, y);
+        const Terrain terrain = t.terrain;
+        t = {};
+        t.terrain = terrain;
+    }
+    return true;
 }
 
 std::vector<std::size_t> World::adjacent_roads(int x, int y) const {
     static constexpr int dx[4] = {1, -1, 0, 0};
     static constexpr int dy[4] = {0, 0, 1, -1};
     std::vector<std::size_t> roads;
-    for (int i = 0; i < 4; ++i) {
-        const int nx = x + dx[i], ny = y + dy[i];
-        if (in_bounds(nx, ny) && tile(nx, ny).structure == Structure::Road) roads.push_back(index(nx, ny));
+
+    int ax = x, ay = y;
+    int extent = 1;
+    if (canonical_house(x, y, ax, ay)) extent = residence_extent(ax, ay);
+
+    for (int oy = 0; oy < extent; ++oy) {
+        for (int ox = 0; ox < extent; ++ox) {
+            const int hx = ax + ox, hy = ay + oy;
+            for (int i = 0; i < 4; ++i) {
+                const int nx = hx + dx[i], ny = hy + dy[i];
+                if (!in_bounds(nx, ny) || tile(nx, ny).structure != Structure::Road) continue;
+                const auto ni = index(nx, ny);
+                if (std::find(roads.begin(), roads.end(), ni) == roads.end()) roads.push_back(ni);
+            }
+        }
     }
     return roads;
 }
+
+bool World::has_road_access(int x, int y) const { return !adjacent_roads(x, y).empty(); }
 
 std::vector<std::size_t> World::road_path_between(int ax, int ay, int bx, int by) const {
     const auto starts = adjacent_roads(ax, ay);
@@ -257,47 +476,65 @@ const char* World::road_level_name(int level) {
 }
 
 bool World::has_well_service(int x, int y) const {
-    if (!in_bounds(x, y)) return false;
-    for (int wy = std::max(0, y - 4); wy <= std::min(kHeight - 1, y + 4); ++wy) {
-        for (int wx = std::max(0, x - 4); wx <= std::min(kWidth - 1, x + 4); ++wx) {
-            if (std::abs(wx - x) + std::abs(wy - y) > 4) continue;
-            if (tile(wx, wy).structure == Structure::Well) return true;
+    int ax = x, ay = y;
+    int extent = 1;
+    if (canonical_house(x, y, ax, ay)) extent = residence_extent(ax, ay);
+    if (!in_bounds(ax, ay)) return false;
+
+    for (int hy = ay; hy < ay + extent; ++hy) {
+        for (int hx = ax; hx < ax + extent; ++hx) {
+            for (int wy = std::max(0, hy - 4); wy <= std::min(kHeight - 1, hy + 4); ++wy) {
+                for (int wx = std::max(0, hx - 4); wx <= std::min(kWidth - 1, hx + 4); ++wx) {
+                    if (std::abs(wx - hx) + std::abs(wy - hy) > 4) continue;
+                    if (tile(wx, wy).structure == Structure::Well) return true;
+                }
+            }
         }
     }
     return false;
 }
 
 int World::house_capacity(int x, int y) const {
-    if (!in_bounds(x, y) || tile(x, y).structure != Structure::House) return 0;
-    switch (tile(x, y).housing_level) {
-        case 0: return 8;
-        case 1: return 12;
-        case 2: return 16;
-        default: return 20;
-    }
+    int ax = -1, ay = -1;
+    if (!canonical_house(x, y, ax, ay)) return 0;
+    const Tile& anchor = tile(ax, ay);
+    const int count = std::max(1, static_cast<int>(anchor.residence_tiles));
+    return base_house_capacity(anchor.housing_level) * count + (count > 1 ? 8 : 0);
 }
 
 int World::house_desirability(int x, int y) const {
-    if (!in_bounds(x, y) || tile(x, y).structure != Structure::House) return 0;
-    int score = 0;
-    for (int yy = std::max(0, y - 4); yy <= std::min(kHeight - 1, y + 4); ++yy) {
-        for (int xx = std::max(0, x - 4); xx <= std::min(kWidth - 1, x + 4); ++xx) {
-            const int distance = std::abs(xx - x) + std::abs(yy - y);
-            if (distance == 0 || distance > 4) continue;
-            const Tile& t = tile(xx, yy);
-            if (t.terrain == Terrain::Water || t.terrain == Terrain::Reeds) ++score;
-            switch (t.structure) {
-                case Structure::Well: score += 2; break;
-                case Structure::Market: score += 1; break;
-                case Structure::ClayPit: score -= 4; break;
-                case Structure::Potter: score -= 3; break;
-                case Structure::HuntingLodge: score -= 2; break;
-                case Structure::Granary: score -= 1; break;
-                default: break;
+    int ax = -1, ay = -1;
+    if (!canonical_house(x, y, ax, ay)) return 0;
+    const int extent = residence_extent(ax, ay);
+    int total = 0;
+    int members = 0;
+
+    for (int oy = 0; oy < extent; ++oy) {
+        for (int ox = 0; ox < extent; ++ox) {
+            const int hx = ax + ox, hy = ay + oy;
+            int score = 0;
+            for (int yy = std::max(0, hy - 4); yy <= std::min(kHeight - 1, hy + 4); ++yy) {
+                for (int xx = std::max(0, hx - 4); xx <= std::min(kWidth - 1, hx + 4); ++xx) {
+                    const int distance = std::abs(xx - hx) + std::abs(yy - hy);
+                    if (distance == 0 || distance > 4) continue;
+                    const Tile& t = tile(xx, yy);
+                    if (t.terrain == Terrain::Water || t.terrain == Terrain::Reeds) ++score;
+                    switch (t.structure) {
+                        case Structure::Well: score += 2; break;
+                        case Structure::Market: score += 1; break;
+                        case Structure::ClayPit: score -= 4; break;
+                        case Structure::Potter: score -= 3; break;
+                        case Structure::HuntingLodge: score -= 2; break;
+                        case Structure::Granary: score -= 1; break;
+                        default: break;
+                    }
+                }
             }
+            total += std::clamp(score, -20, 20);
+            ++members;
         }
     }
-    return std::clamp(score, -20, 20);
+    return members > 0 ? std::clamp(total / members, -20, 20) : 0;
 }
 
 const char* World::housing_name(std::uint8_t level) {
@@ -310,17 +547,18 @@ const char* World::housing_name(std::uint8_t level) {
 }
 
 const char* World::house_evolution_status(int x, int y) const {
-    if (!in_bounds(x, y) || tile(x, y).structure != Structure::House) return "NOT A HOUSE";
-    const Tile& h = tile(x, y);
-    if (!has_road_access(x, y)) return "NEEDS ROAD ACCESS";
+    int ax = -1, ay = -1;
+    if (!canonical_house(x, y, ax, ay)) return "NOT A HOUSE";
+    const Tile& h = tile(ax, ay);
+    if (!has_road_access(ax, ay)) return "NEEDS ROAD ACCESS";
     if (h.population == 0) return "WAITING FOR SETTLERS";
-    if (h.food_stock == 0 && pending_goods_for(x, y, Resource::Food) == 0) return "NEEDS A RELIABLE FOOD SUPPLY";
-    if (!has_well_service(x, y)) return "NEEDS WATER FROM A NEARBY WELL";
+    if (h.food_stock == 0 && pending_goods_for(ax, ay, Resource::Food) == 0) return "NEEDS A RELIABLE FOOD SUPPLY";
+    if (!has_well_service(ax, ay)) return "NEEDS WATER FROM A NEARBY WELL";
     if (h.housing_level == 0 && h.housing_service_ticks < 4) return "FOOD AND WATER ARE STABILISING";
     if (h.housing_level == 1 && h.housing_service_ticks < 12) return "SUSTAIN FOOD AND WATER TO EVOLVE";
     if (h.housing_level == 2 && h.pottery_stock == 0) return "NEEDS POTTERY FROM A MARKET";
     if (h.housing_level == 2 && h.housing_goods_ticks < 6) return "POTTERY SUPPLY IS STABILISING";
-    if (h.housing_level >= 3 && house_desirability(x, y) < 3) return "NEEDS A MORE DESIRABLE NEIGHBOURHOOD";
+    if (h.housing_level >= 3 && house_desirability(ax, ay) < 3) return "NEEDS A MORE DESIRABLE NEIGHBOURHOOD";
     if (h.housing_level >= 3) return "NEEDS MORE GOODS AND SERVICES FOR NEXT LEVEL";
     return "READY TO EVOLVE";
 }
@@ -362,16 +600,24 @@ void World::produce_pottery() {
 }
 
 int World::pending_goods_for(int target_x, int target_y, Resource resource) const {
+    int query_x = target_x, query_y = target_y;
+    (void)canonical_house(target_x, target_y, query_x, query_y);
+
     int total = 0;
     for (const auto& g : goods_agents_) {
-        if (g.target_x == target_x && g.target_y == target_y && g.resource == resource) total += g.amount;
+        int gx = g.target_x, gy = g.target_y;
+        (void)canonical_house(g.target_x, g.target_y, gx, gy);
+        if (gx == query_x && gy == query_y && g.resource == resource) total += g.amount;
     }
     return total;
 }
 
 bool World::spawn_goods_agent(int source_x, int source_y, int target_x, int target_y, Resource resource, int amount) {
     if (amount <= 0 || goods_agents_.size() >= 128U) return false;
-    auto path = road_path_between(source_x, source_y, target_x, target_y);
+
+    int tx = target_x, ty = target_y;
+    (void)canonical_house(target_x, target_y, tx, ty);
+    auto path = road_path_between(source_x, source_y, tx, ty);
     if (path.empty()) return false;
 
     Tile& source = tile(source_x, source_y);
@@ -388,7 +634,7 @@ bool World::spawn_goods_agent(int source_x, int source_y, int target_x, int targ
 
     GoodsAgent g;
     g.source_x = source_x; g.source_y = source_y;
-    g.target_x = target_x; g.target_y = target_y;
+    g.target_x = tx; g.target_y = ty;
     g.resource = resource; g.amount = static_cast<std::uint8_t>(amount);
     g.road_path = std::move(path);
     const auto start = g.road_path.front();
@@ -432,22 +678,27 @@ void World::move_food_to_markets() {
 
 void World::feed_houses() {
     for (int hy = 0; hy < kHeight; ++hy) for (int hx = 0; hx < kWidth; ++hx) {
+        if (tile(hx, hy).structure != Structure::House || !is_residence_anchor(hx, hy)) continue;
         Tile& house = tile(hx, hy);
-        if (house.structure != Structure::House) continue;
         const bool road = has_road_access(hx, hy);
         const int incoming = pending_goods_for(hx, hy, Resource::Food);
-        const int space = 12 - static_cast<int>(house.food_stock) - incoming;
+        const int food_capacity = 12 * residence_tiles(hx, hy);
+        const int space = food_capacity - static_cast<int>(house.food_stock) - incoming;
         if (road && space > 0) {
             bool dispatched = false;
             for (int my = 0; my < kHeight && !dispatched; ++my) for (int mx = 0; mx < kWidth && !dispatched; ++mx) {
                 Tile& market = tile(mx, my);
                 if (market.structure != Structure::Market || market.food_stock == 0 || active_workers_for_job(mx, my) == 0) continue;
                 if (!within_delivery_range(hx, hy, mx, my)) continue;
-                dispatched = spawn_goods_agent(mx, my, hx, hy, Resource::Food, std::min<int>({2, market.food_stock, space}));
+                dispatched = spawn_goods_agent(mx, my, hx, hy, Resource::Food,
+                    std::min<int>({2, market.food_stock, space}));
             }
         }
 
-        if ((ticks_ % 4U) == 0U && house.population > 0 && house.food_stock > 0) --house.food_stock;
+        if ((ticks_ % 4U) == 0U && house.population > 0 && house.food_stock > 0) {
+            const int demand = std::max(1, (static_cast<int>(house.population) + 7) / 8);
+            house.food_stock = static_cast<std::uint16_t>(house.food_stock - std::min<int>(house.food_stock, demand));
+        }
         if (!road) {
             if ((ticks_ % 12U) == 0U && house.population > house.employed) --house.population;
             continue;
@@ -461,15 +712,17 @@ void World::feed_houses() {
 
 void World::consume_household_goods() {
     if ((ticks_ % 24U) != 0U) return;
-    for (auto& t : tiles_) {
-        if (t.structure == Structure::House && t.population > 0 && t.pottery_stock > 0) --t.pottery_stock;
+    for (int y = 0; y < kHeight; ++y) for (int x = 0; x < kWidth; ++x) {
+        if (tile(x, y).structure != Structure::House || !is_residence_anchor(x, y)) continue;
+        Tile& h = tile(x, y);
+        if (h.population > 0 && h.pottery_stock > 0) --h.pottery_stock;
     }
 }
 
 void World::update_housing() {
     for (int y = 0; y < kHeight; ++y) for (int x = 0; x < kWidth; ++x) {
+        if (tile(x, y).structure != Structure::House || !is_residence_anchor(x, y)) continue;
         Tile& house = tile(x, y);
-        if (house.structure != Structure::House) continue;
         const bool food_service = house.food_stock > 0 || pending_goods_for(x, y, Resource::Food) > 0;
         const bool supported = house.population > 0 && has_road_access(x, y) && food_service && has_well_service(x, y);
         if (supported) {
@@ -485,21 +738,27 @@ void World::update_housing() {
             if ((ticks_ % 4U) == 0U && house.housing_goods_ticks > 0) --house.housing_goods_ticks;
             if ((ticks_ % 8U) == 0U && house.housing_service_ticks == 0 && house.housing_level > 0) --house.housing_level;
         }
-        if (house.housing_level >= 3 && house.pottery_stock == 0 && house.housing_goods_ticks == 0 && (ticks_ % 16U) == 0U) {
+        if (house.housing_level >= 3 && house.pottery_stock == 0 && house.housing_goods_ticks == 0 &&
+            (ticks_ % 16U) == 0U) {
             house.housing_level = 2;
         }
         const int capacity = house_capacity(x, y);
         if (house.population > capacity && house.population > house.employed) --house.population;
+        sync_residence_members(x, y);
     }
 }
 
 std::vector<std::size_t> World::immigration_path_to(int house_x, int house_y) const {
-    const auto goals = adjacent_roads(house_x, house_y);
+    int hx = house_x, hy = house_y;
+    (void)canonical_house(house_x, house_y, hx, hy);
+    const auto goals = adjacent_roads(hx, hy);
     if (goals.empty()) return {};
+
     std::vector<int> previous(tiles_.size(), -1);
     std::vector<std::uint8_t> seen(tiles_.size(), 0);
     std::queue<std::size_t> q;
     for (const auto goal : goals) { seen[goal] = 1; q.push(goal); }
+
     static constexpr int dx[4] = {1, -1, 0, 0};
     static constexpr int dy[4] = {0, 0, 1, -1};
     std::size_t entrance = tiles_.size();
@@ -518,6 +777,7 @@ std::vector<std::size_t> World::immigration_path_to(int house_x, int house_y) co
         }
     }
     if (entrance == tiles_.size()) return {};
+
     std::vector<std::size_t> path;
     for (std::size_t current = entrance;;) {
         path.push_back(current);
@@ -529,8 +789,14 @@ std::vector<std::size_t> World::immigration_path_to(int house_x, int house_y) co
 }
 
 int World::pending_immigrants_for(int house_x, int house_y) const {
+    int qx = house_x, qy = house_y;
+    (void)canonical_house(house_x, house_y, qx, qy);
     int pending = 0;
-    for (const auto& a : immigrants_) if (a.target_x == house_x && a.target_y == house_y) pending += a.group_size;
+    for (const auto& a : immigrants_) {
+        int ax = a.target_x, ay = a.target_y;
+        (void)canonical_house(a.target_x, a.target_y, ax, ay);
+        if (ax == qx && ay == qy) pending += a.group_size;
+    }
     return pending;
 }
 
@@ -539,9 +805,10 @@ void World::create_immigration() {
     int groups = 0;
     for (int hy = 0; hy < kHeight && groups < 4; ++hy) for (int hx = 0; hx < kWidth && groups < 4; ++hx) {
         const Tile& house = tile(hx, hy);
-        if (house.structure != Structure::House || !has_road_access(hx, hy)) continue;
+        if (house.structure != Structure::House || !is_residence_anchor(hx, hy) || !has_road_access(hx, hy)) continue;
         const bool supplied = house.food_stock > 0 || pending_goods_for(hx, hy, Resource::Food) > 0;
-        const int attraction_capacity = supplied ? house_capacity(hx, hy) : std::min(4, house_capacity(hx, hy));
+        const int pioneer_limit = std::min(house_capacity(hx, hy), 4 * residence_tiles(hx, hy));
+        const int attraction_capacity = supplied ? house_capacity(hx, hy) : pioneer_limit;
         const int vacancies = attraction_capacity - static_cast<int>(house.population) - pending_immigrants_for(hx, hy);
         if (vacancies <= 0) continue;
         auto path = immigration_path_to(hx, hy);
@@ -562,22 +829,25 @@ void World::move_immigrants() {
     for (std::size_t i = 0; i < immigrants_.size();) {
         ImmigrantAgent& a = immigrants_[i];
         bool remove = false;
-        if (!in_bounds(a.target_x, a.target_y)) remove = true;
+        int tx = a.target_x, ty = a.target_y;
+        if (!canonical_house(a.target_x, a.target_y, tx, ty) || !has_road_access(tx, ty)) remove = true;
         else {
-            const Tile& h = tile(a.target_x, a.target_y);
-            if (h.structure != Structure::House || !has_road_access(a.target_x, a.target_y)) remove = true;
+            a.target_x = tx;
+            a.target_y = ty;
         }
+
         if (!remove && a.path_position + 1 < a.road_path.size()) {
             const auto next = a.road_path[++a.path_position];
             const int nx = static_cast<int>(next % kWidth), ny = static_cast<int>(next / kWidth);
             if (tile(nx, ny).structure != Structure::Road) remove = true;
             else { a.x = nx; a.y = ny; record_road_traffic(nx, ny, a.group_size); }
         } else if (!remove) {
-            Tile& h = tile(a.target_x, a.target_y);
-            const int space = house_capacity(a.target_x, a.target_y) - static_cast<int>(h.population);
+            Tile& h = tile(tx, ty);
+            const int space = house_capacity(tx, ty) - static_cast<int>(h.population);
             if (space > 0) h.population = static_cast<std::uint8_t>(h.population + std::min<int>(space, a.group_size));
             remove = true;
         }
+
         if (remove) immigrants_.erase(immigrants_.begin() + static_cast<std::ptrdiff_t>(i)); else ++i;
     }
 }
@@ -610,7 +880,8 @@ void World::recruit_workers() {
         bool hired = false;
         for (int hy = 0; hy < kHeight && !hired; ++hy) for (int hx = 0; hx < kWidth && !hired; ++hx) {
             Tile& home = tile(hx, hy);
-            if (home.structure != Structure::House || home.population <= home.employed || !has_road_access(hx, hy)) continue;
+            if (home.structure != Structure::House || !is_residence_anchor(hx, hy) ||
+                home.population <= home.employed || !has_road_access(hx, hy)) continue;
             auto path = road_path_between(hx, hy, jx, jy);
             if (path.empty()) continue;
 
@@ -641,10 +912,14 @@ void World::move_workers() {
     for (std::size_t i = 0; i < workers_.size();) {
         WorkerAgent& w = workers_[i];
         bool remove = false;
-        if (!in_bounds(w.home_x, w.home_y) || !in_bounds(w.job_x, w.job_y) ||
-            tile(w.home_x, w.home_y).structure != Structure::House ||
-            !is_workplace(tile(w.job_x, w.job_y).structure) || role_for(tile(w.job_x, w.job_y).structure) != w.role) {
+        int home_x = w.home_x, home_y = w.home_y;
+        if (!canonical_house(w.home_x, w.home_y, home_x, home_y) ||
+            !in_bounds(w.job_x, w.job_y) || !is_workplace(tile(w.job_x, w.job_y).structure) ||
+            role_for(tile(w.job_x, w.job_y).structure) != w.role) {
             remove = true;
+        } else {
+            w.home_x = home_x;
+            w.home_y = home_y;
         }
 
         if (!remove) {
@@ -768,16 +1043,17 @@ void World::queue_goods_deliveries() {
 
     for (int hy = 0; hy < kHeight; ++hy) for (int hx = 0; hx < kWidth; ++hx) {
         Tile& house = tile(hx, hy);
-        if (house.structure != Structure::House || !has_road_access(hx, hy)) continue;
+        if (house.structure != Structure::House || !is_residence_anchor(hx, hy) || !has_road_access(hx, hy)) continue;
         const int incoming = pending_goods_for(hx, hy, Resource::Pottery);
-        if (static_cast<int>(house.pottery_stock) + incoming >= 4) continue;
+        const int target = 4 * residence_tiles(hx, hy);
+        if (static_cast<int>(house.pottery_stock) + incoming >= target) continue;
         bool dispatched = false;
         for (int my = 0; my < kHeight && !dispatched; ++my) for (int mx = 0; mx < kWidth && !dispatched; ++mx) {
             Tile& market = tile(mx, my);
             if (market.structure != Structure::Market || market.pottery_stock == 0 || active_workers_for_job(mx, my) == 0) continue;
             if (!within_delivery_range(hx, hy, mx, my)) continue;
             dispatched = spawn_goods_agent(mx, my, hx, hy, Resource::Pottery,
-                std::min<int>(2, 4 - static_cast<int>(house.pottery_stock) - incoming));
+                std::min<int>(2, target - static_cast<int>(house.pottery_stock) - incoming));
         }
     }
 }
@@ -786,6 +1062,15 @@ void World::move_goods() {
     for (std::size_t i = 0; i < goods_agents_.size();) {
         GoodsAgent& g = goods_agents_[i];
         bool remove = false;
+
+        int tx = g.target_x, ty = g.target_y;
+        if (in_bounds(tx, ty) && tile(tx, ty).structure == Structure::House) {
+            if (canonical_house(tx, ty, tx, ty)) {
+                g.target_x = tx;
+                g.target_y = ty;
+            }
+        }
+
         if (!in_bounds(g.target_x, g.target_y) || g.amount == 0) remove = true;
         if (!remove && g.path_position + 1 < g.road_path.size()) {
             const auto next = g.road_path[++g.path_position];
@@ -801,7 +1086,7 @@ void World::move_goods() {
                 const int space = 32 - target.food_stock;
                 target.food_stock = static_cast<std::uint16_t>(target.food_stock + std::min<int>(space, g.amount));
             } else if (g.resource == Resource::Food && target.structure == Structure::House) {
-                const int space = 12 - target.food_stock;
+                const int space = 12 * residence_tiles(g.target_x, g.target_y) - target.food_stock;
                 target.food_stock = static_cast<std::uint16_t>(target.food_stock + std::min<int>(space, g.amount));
             } else if (g.resource == Resource::Clay && target.structure == Structure::Potter) {
                 const int space = 24 - target.clay_stock;
@@ -810,7 +1095,7 @@ void World::move_goods() {
                 const int space = 24 - target.pottery_stock;
                 target.pottery_stock = static_cast<std::uint16_t>(target.pottery_stock + std::min<int>(space, g.amount));
             } else if (g.resource == Resource::Pottery && target.structure == Structure::House) {
-                const int space = 6 - target.pottery_stock;
+                const int space = 6 * residence_tiles(g.target_x, g.target_y) - target.pottery_stock;
                 target.pottery_stock = static_cast<std::uint16_t>(target.pottery_stock + std::min<int>(space, g.amount));
             }
             remove = true;
@@ -834,15 +1119,60 @@ void World::tick() {
     feed_houses();
     consume_household_goods();
     update_housing();
+    update_residence_merges();
     queue_goods_deliveries();
 }
 
-int World::population() const { int p = 0; for (const auto& t : tiles_) p += t.population; return p; }
-int World::employed_population() const { int p = 0; for (const auto& t : tiles_) p += t.employed; return p; }
-int World::total_food() const { int v = 0; for (const auto& t : tiles_) v += t.food_stock; for (const auto& g : goods_agents_) if (g.resource == Resource::Food) v += g.amount; return v; }
-int World::total_clay() const { int v = 0; for (const auto& t : tiles_) v += t.clay_stock; for (const auto& g : goods_agents_) if (g.resource == Resource::Clay) v += g.amount; return v; }
-int World::total_pottery() const { int v = 0; for (const auto& t : tiles_) v += t.pottery_stock; for (const auto& g : goods_agents_) if (g.resource == Resource::Pottery) v += g.amount; return v; }
-int World::immigrants_in_transit() const { int n = 0; for (const auto& a : immigrants_) n += a.group_size; return n; }
+int World::population() const {
+    int p = 0;
+    for (int y = 0; y < kHeight; ++y) for (int x = 0; x < kWidth; ++x) {
+        if (tile(x, y).structure == Structure::House && !is_residence_anchor(x, y)) continue;
+        p += tile(x, y).population;
+    }
+    return p;
+}
+
+int World::employed_population() const {
+    int p = 0;
+    for (int y = 0; y < kHeight; ++y) for (int x = 0; x < kWidth; ++x) {
+        if (tile(x, y).structure == Structure::House && !is_residence_anchor(x, y)) continue;
+        p += tile(x, y).employed;
+    }
+    return p;
+}
+
+int World::total_food() const {
+    int v = 0;
+    for (int y = 0; y < kHeight; ++y) for (int x = 0; x < kWidth; ++x) {
+        if (tile(x, y).structure == Structure::House && !is_residence_anchor(x, y)) continue;
+        v += tile(x, y).food_stock;
+    }
+    for (const auto& g : goods_agents_) if (g.resource == Resource::Food) v += g.amount;
+    return v;
+}
+
+int World::total_clay() const {
+    int v = 0;
+    for (const auto& t : tiles_) v += t.clay_stock;
+    for (const auto& g : goods_agents_) if (g.resource == Resource::Clay) v += g.amount;
+    return v;
+}
+
+int World::total_pottery() const {
+    int v = 0;
+    for (int y = 0; y < kHeight; ++y) for (int x = 0; x < kWidth; ++x) {
+        if (tile(x, y).structure == Structure::House && !is_residence_anchor(x, y)) continue;
+        v += tile(x, y).pottery_stock;
+    }
+    for (const auto& g : goods_agents_) if (g.resource == Resource::Pottery) v += g.amount;
+    return v;
+}
+
+int World::immigrants_in_transit() const {
+    int n = 0;
+    for (const auto& a : immigrants_) n += a.group_size;
+    return n;
+}
 
 const char* World::terrain_name(Terrain t) {
     switch (t) {
