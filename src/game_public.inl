@@ -21,14 +21,16 @@ public:
 
     void tick() {
         if (screen_ != Screen::Game || paused_) return;
-        for (int i = 0; i < simulation_speed_; ++i) world_.tick();
+        ++simulation_subtick_;
+        const std::uint64_t divisor = simulation_speed_ >= 4 ? 1U : (simulation_speed_ == 2 ? 2U : 4U);
+        if ((simulation_subtick_ % divisor) == 0U) world_.tick();
         dirty_ = true;
     }
 
     void frame(double dt) {
         atmosphere_time_ += dt;
         atmosphere_redraw_ += dt;
-        if (screen_ == Screen::Game && atmosphere_redraw_ >= 0.12) {
+        if (screen_ == Screen::Game && atmosphere_redraw_ >= (1.0 / 30.0)) {
             atmosphere_redraw_ = 0.0;
             dirty_ = true;
         }
