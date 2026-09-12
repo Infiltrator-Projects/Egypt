@@ -93,6 +93,48 @@ bool World::place(Structure s, int x, int y) {
     return true;
 }
 
+bool World::is_workplace(Structure s) const {
+    return s == Structure::Farm || s == Structure::ClayPit || s == Structure::Potter ||
+           s == Structure::Granary || s == Structure::Market || s == Structure::HuntingLodge;
+}
+
+int World::desired_workers_for(Structure s) const {
+    if (s == Structure::HuntingLodge) return 2;
+    return is_workplace(s) ? 1 : 0;
+}
+
+WorkerRole World::role_for(Structure s) const {
+    switch (s) {
+        case Structure::Farm: return WorkerRole::Farmer;
+        case Structure::ClayPit: return WorkerRole::ClayWorker;
+        case Structure::Potter: return WorkerRole::Potter;
+        case Structure::Granary: return WorkerRole::GranaryWorker;
+        case Structure::Market: return WorkerRole::MarketWorker;
+        case Structure::HuntingLodge: return WorkerRole::Hunter;
+        default: return WorkerRole::Hunter;
+    }
+}
+
+int World::assigned_workers_for_job(int job_x, int job_y) const {
+    int count = 0;
+    for (const auto& w : workers_) if (w.job_x == job_x && w.job_y == job_y) ++count;
+    return count;
+}
+
+int World::active_workers_for_job(int job_x, int job_y) const {
+    int count = 0;
+    for (const auto& w : workers_) {
+        if (w.job_x != job_x || w.job_y != job_y) continue;
+        if (w.state == WorkerState::WorkingAtJob || w.state == WorkerState::HunterOutbound ||
+            w.state == WorkerState::Hunting || w.state == WorkerState::HunterReturning) ++count;
+    }
+    return count;
+}
+
+int World::workers_assigned(int x, int y) const { return in_bounds(x, y) ? assigned_workers_for_job(x, y) : 0; }
+int World::workers_active(int x, int y) const { return in_bounds(x, y) ? active_workers_for_job(x, y) : 0; }
+int World::worker_capacity(int x, int y) const { return in_bounds(x, y) ? desired_workers_for(tile(x, y).structure) : 0; }
+
 void World::release_worker(const WorkerAgent& worker) {
     if (!in_bounds(worker.home_x, worker.home_y)) return;
     Tile& home = tile(worker.home_x, worker.home_y);
@@ -271,6 +313,7 @@ const char* World::house_evolution_status(int x, int y) const {
     if (!in_bounds(x, y) || tile(x, y).structure != Structure::House) return "NOT A HOUSE";
     const Tile& h = tile(x, y);
     if (!has_road_access(x, y)) return "NEEDS ROAD ACCESS";
+    if (h.population == 0) return "WAITING FOR SETTLERS";
     if (h.food_stock == 0) return "NEEDS A RELIABLE FOOD SUPPLY";
     if (!has_well_service(x, y)) return "NEEDS WATER FROM A NEARBY WELL";
     if (h.housing_level == 0 && h.housing_service_ticks < 4) return "FOOD AND WATER ARE STABILISING";
@@ -290,7 +333,7 @@ void World::produce_food() {
     if ((ticks_ % 4U) != 0U) return;
     for (int y = 0; y < kHeight; ++y) for (int x = 0; x < kWidth; ++x) {
         Tile& t = tile(x, y);
-        if (t.structure == Structure::Farm && has_road_access(x, y)) {
+        if (t.structure == Structure::Farm && active_workers_for_job(x, y) > 0) {
             t.food_stock = static_cast<std::uint16_t>(std::min<int>(32, t.food_stock + 2));
         }
     }
@@ -300,7 +343,7 @@ void World::produce_clay() {
     if ((ticks_ % 4U) != 0U) return;
     for (int y = 0; y < kHeight; ++y) for (int x = 0; x < kWidth; ++x) {
         Tile& t = tile(x, y);
-        if (t.structure == Structure::ClayPit && has_road_access(x, y)) {
+        if (t.structure == Structure::ClayPit && active_workers_for_job(x, y) > 0) {
             t.clay_stock = static_cast<std::uint16_t>(std::min<int>(32, t.clay_stock + 2));
         }
     }
@@ -310,7 +353,7 @@ void World::produce_pottery() {
     if ((ticks_ % 4U) != 0U) return;
     for (int y = 0; y < kHeight; ++y) for (int x = 0; x < kWidth; ++x) {
         Tile& t = tile(x, y);
-        if (t.structure != Structure::Potter || !has_road_access(x, y)) continue;
+        if (t.structure != Structure::Potter || active_workers_for_job(x, y) == 0) continue;
         if (t.clay_stock >= 2 && t.pottery_stock <= 22) {
             t.clay_stock = static_cast<std::uint16_t>(t.clay_stock - 2);
             t.pottery_stock = static_cast<std::uint16_t>(t.pottery_stock + 2);
@@ -318,10 +361,47 @@ void World::produce_pottery() {
     }
 }
 
+int World::pending_goods_for(int target_x, int target_y, Resource resource) const {
+    int total = 0;
+    for (const auto& g : goods_agents_) {
+        if (g.target_x == target_x && g.target_y == target_y && g.resource == resource) total += g.amount;
+    }
+    return total;
+}
+
+bool World::spawn_goods_agent(int source_x, int source_y, int target_x, int target_y, Resource resource, int amount) {
+    if (amount <= 0 || goods_agents_.size() >= 128U) return false;
+    auto path = road_path_between(source_x, source_y, target_x, target_y);
+    if (path.empty()) return false;
+
+    Tile& source = tile(source_x, source_y);
+    int available = 0;
+    if (resource == Resource::Clay) available = source.clay_stock;
+    else if (resource == Resource::Pottery) available = source.pottery_stock;
+    else available = source.food_stock;
+    amount = std::min(amount, available);
+    if (amount <= 0) return false;
+
+    if (resource == Resource::Clay) source.clay_stock = static_cast<std::uint16_t>(source.clay_stock - amount);
+    else if (resource == Resource::Pottery) source.pottery_stock = static_cast<std::uint16_t>(source.pottery_stock - amount);
+    else source.food_stock = static_cast<std::uint16_t>(source.food_stock - amount);
+
+    GoodsAgent g;
+    g.source_x = source_x; g.source_y = source_y;
+    g.target_x = target_x; g.target_y = target_y;
+    g.resource = resource; g.amount = static_cast<std::uint8_t>(amount);
+    g.road_path = std::move(path);
+    const auto start = g.road_path.front();
+    g.x = static_cast<int>(start % kWidth); g.y = static_cast<int>(start / kWidth);
+    record_road_traffic(g.x, g.y);
+    goods_agents_.push_back(std::move(g));
+    return true;
+}
+
 void World::move_food_to_granaries() {
     for (int gy = 0; gy < kHeight; ++gy) for (int gx = 0; gx < kWidth; ++gx) {
         Tile& granary = tile(gx, gy);
-        if (granary.structure != Structure::Granary || !has_road_access(gx, gy)) continue;
+        if (granary.structure != Structure::Granary || active_workers_for_job(gx, gy) == 0) continue;
         const int incoming = pending_goods_for(gx, gy, Resource::Food);
         const int space = 96 - static_cast<int>(granary.food_stock) - incoming;
         if (space <= 0) continue;
@@ -329,8 +409,7 @@ void World::move_food_to_granaries() {
         for (int sy = 0; sy < kHeight && !dispatched; ++sy) for (int sx = 0; sx < kWidth && !dispatched; ++sx) {
             Tile& source = tile(sx, sy);
             if ((source.structure != Structure::Farm && source.structure != Structure::HuntingLodge) || source.food_stock == 0) continue;
-            const int amount = std::min<int>({6, source.food_stock, space});
-            dispatched = spawn_goods_agent(sx, sy, gx, gy, Resource::Food, amount);
+            dispatched = spawn_goods_agent(sx, sy, gx, gy, Resource::Food, std::min<int>({6, source.food_stock, space}));
         }
     }
 }
@@ -338,16 +417,15 @@ void World::move_food_to_granaries() {
 void World::move_food_to_markets() {
     for (int my = 0; my < kHeight; ++my) for (int mx = 0; mx < kWidth; ++mx) {
         Tile& market = tile(mx, my);
-        if (market.structure != Structure::Market || !has_road_access(mx, my)) continue;
+        if (market.structure != Structure::Market || active_workers_for_job(mx, my) == 0) continue;
         const int incoming = pending_goods_for(mx, my, Resource::Food);
         const int space = 32 - static_cast<int>(market.food_stock) - incoming;
         if (space <= 0) continue;
         bool dispatched = false;
         for (int gy = 0; gy < kHeight && !dispatched; ++gy) for (int gx = 0; gx < kWidth && !dispatched; ++gx) {
             Tile& granary = tile(gx, gy);
-            if (granary.structure != Structure::Granary || granary.food_stock == 0) continue;
-            const int amount = std::min<int>({4, granary.food_stock, space});
-            dispatched = spawn_goods_agent(gx, gy, mx, my, Resource::Food, amount);
+            if (granary.structure != Structure::Granary || granary.food_stock == 0 || active_workers_for_job(gx, gy) == 0) continue;
+            dispatched = spawn_goods_agent(gx, gy, mx, my, Resource::Food, std::min<int>({4, granary.food_stock, space}));
         }
     }
 }
@@ -363,7 +441,7 @@ void World::feed_houses() {
             bool dispatched = false;
             for (int my = 0; my < kHeight && !dispatched; ++my) for (int mx = 0; mx < kWidth && !dispatched; ++mx) {
                 Tile& market = tile(mx, my);
-                if (market.structure != Structure::Market || market.food_stock == 0) continue;
+                if (market.structure != Structure::Market || market.food_stock == 0 || active_workers_for_job(mx, my) == 0) continue;
                 if (!within_delivery_range(hx, hy, mx, my)) continue;
                 dispatched = spawn_goods_agent(mx, my, hx, hy, Resource::Food, std::min<int>({2, market.food_stock, space}));
             }
@@ -371,14 +449,12 @@ void World::feed_houses() {
 
         if ((ticks_ % 4U) == 0U && house.population > 0 && house.food_stock > 0) --house.food_stock;
         if (!road) {
-            if (house.population > 0) --house.population;
-            if (house.employed > house.population) house.employed = house.population;
+            if ((ticks_ % 12U) == 0U && house.population > house.employed) --house.population;
             continue;
         }
         if (house.food_stock == 0 && pending_goods_for(hx, hy, Resource::Food) == 0 &&
-            (ticks_ % 4U) == 0U && house.population > 0) {
+            (ticks_ % 24U) == 0U && house.population > house.employed) {
             --house.population;
-            if (house.employed > house.population) house.employed = house.population;
         }
     }
 }
@@ -394,7 +470,7 @@ void World::update_housing() {
     for (int y = 0; y < kHeight; ++y) for (int x = 0; x < kWidth; ++x) {
         Tile& house = tile(x, y);
         if (house.structure != Structure::House) continue;
-        const bool supported = has_road_access(x, y) && house.food_stock > 0 && has_well_service(x, y);
+        const bool supported = house.population > 0 && has_road_access(x, y) && house.food_stock > 0 && has_well_service(x, y);
         if (supported) {
             if (house.housing_service_ticks < 24) ++house.housing_service_ticks;
             if (house.housing_level == 0 && house.housing_service_ticks >= 4) house.housing_level = 1;
@@ -402,9 +478,7 @@ void World::update_housing() {
             if (house.housing_level >= 2 && house.pottery_stock > 0) {
                 if (house.housing_goods_ticks < 12) ++house.housing_goods_ticks;
                 if (house.housing_level == 2 && house.housing_goods_ticks >= 6) house.housing_level = 3;
-            } else if (house.housing_goods_ticks > 0) {
-                --house.housing_goods_ticks;
-            }
+            } else if (house.housing_goods_ticks > 0) --house.housing_goods_ticks;
         } else {
             if (house.housing_service_ticks > 0) --house.housing_service_ticks;
             if (house.housing_goods_ticks > 0) --house.housing_goods_ticks;
@@ -414,8 +488,7 @@ void World::update_housing() {
             house.housing_level = 2;
         }
         const int capacity = house_capacity(x, y);
-        if (house.population > capacity) --house.population;
-        if (house.employed > house.population) house.employed = house.population;
+        if (house.population > capacity && house.population > house.employed) --house.population;
     }
 }
 
@@ -465,8 +538,10 @@ void World::create_immigration() {
     int groups = 0;
     for (int hy = 0; hy < kHeight && groups < 4; ++hy) for (int hx = 0; hx < kWidth && groups < 4; ++hx) {
         const Tile& house = tile(hx, hy);
-        if (house.structure != Structure::House || house.food_stock == 0 || !has_road_access(hx, hy)) continue;
-        const int vacancies = house_capacity(hx, hy) - static_cast<int>(house.population) - pending_immigrants_for(hx, hy);
+        if (house.structure != Structure::House || !has_road_access(hx, hy)) continue;
+        const bool supplied = house.food_stock > 0 || pending_goods_for(hx, hy, Resource::Food) > 0;
+        const int attraction_capacity = supplied ? house_capacity(hx, hy) : std::min(4, house_capacity(hx, hy));
+        const int vacancies = attraction_capacity - static_cast<int>(house.population) - pending_immigrants_for(hx, hy);
         if (vacancies <= 0) continue;
         auto path = immigration_path_to(hx, hy);
         if (path.empty()) continue;
@@ -475,7 +550,7 @@ void World::create_immigration() {
         ImmigrantAgent a;
         a.x = static_cast<int>(start % kWidth); a.y = static_cast<int>(start / kWidth);
         a.target_x = hx; a.target_y = hy; a.group_size = static_cast<std::uint8_t>(group);
-        a.road_path = std::move(path); a.path_position = 0;
+        a.road_path = std::move(path);
         record_road_traffic(a.x, a.y, group);
         immigrants_.push_back(std::move(a));
         ++groups;
@@ -489,7 +564,7 @@ void World::move_immigrants() {
         if (!in_bounds(a.target_x, a.target_y)) remove = true;
         else {
             const Tile& h = tile(a.target_x, a.target_y);
-            if (h.structure != Structure::House || h.food_stock == 0 || !has_road_access(a.target_x, a.target_y)) remove = true;
+            if (h.structure != Structure::House || !has_road_access(a.target_x, a.target_y)) remove = true;
         }
         if (!remove && a.path_position + 1 < a.road_path.size()) {
             const auto next = a.road_path[++a.path_position];
@@ -504,12 +579,6 @@ void World::move_immigrants() {
         }
         if (remove) immigrants_.erase(immigrants_.begin() + static_cast<std::ptrdiff_t>(i)); else ++i;
     }
-}
-
-int World::assigned_workers_for_job(int job_x, int job_y) const {
-    int count = 0;
-    for (const auto& w : workers_) if (w.job_x == job_x && w.job_y == job_y) ++count;
-    return count;
 }
 
 std::vector<std::size_t> World::hunting_path_from(int job_x, int job_y) const {
@@ -533,16 +602,20 @@ std::vector<std::size_t> World::hunting_path_from(int job_x, int job_y) const {
 void World::recruit_workers() {
     if ((ticks_ % 4U) != 0U) return;
     for (int jy = 0; jy < kHeight; ++jy) for (int jx = 0; jx < kWidth; ++jx) {
-        if (tile(jx, jy).structure != Structure::HuntingLodge || !has_road_access(jx, jy)) continue;
-        if (assigned_workers_for_job(jx, jy) >= 2) continue;
+        const Structure job_structure = tile(jx, jy).structure;
+        if (!is_workplace(job_structure) || !has_road_access(jx, jy)) continue;
+        if (assigned_workers_for_job(jx, jy) >= desired_workers_for(job_structure)) continue;
+
         bool hired = false;
         for (int hy = 0; hy < kHeight && !hired; ++hy) for (int hx = 0; hx < kWidth && !hired; ++hx) {
             Tile& home = tile(hx, hy);
             if (home.structure != Structure::House || home.population <= home.employed || !has_road_access(hx, hy)) continue;
             auto path = road_path_between(hx, hy, jx, jy);
             if (path.empty()) continue;
+
             WorkerAgent w;
             w.home_x = hx; w.home_y = hy; w.job_x = jx; w.job_y = jy;
+            w.role = role_for(job_structure);
             w.state = WorkerState::CommutingToJob;
             w.path = std::move(path);
             const auto start = w.path.front();
@@ -555,13 +628,23 @@ void World::recruit_workers() {
     }
 }
 
+void World::start_commute_home(WorkerAgent& w) {
+    w.path = road_path_between(w.home_x, w.home_y, w.job_x, w.job_y);
+    if (w.path.empty()) return;
+    std::reverse(w.path.begin(), w.path.end());
+    w.path_position = 0;
+    w.state = WorkerState::CommutingHome;
+}
+
 void World::move_workers() {
     for (std::size_t i = 0; i < workers_.size();) {
         WorkerAgent& w = workers_[i];
         bool remove = false;
         if (!in_bounds(w.home_x, w.home_y) || !in_bounds(w.job_x, w.job_y) ||
             tile(w.home_x, w.home_y).structure != Structure::House ||
-            tile(w.job_x, w.job_y).structure != Structure::HuntingLodge) remove = true;
+            !is_workplace(tile(w.job_x, w.job_y).structure) || role_for(tile(w.job_x, w.job_y).structure) != w.role) {
+            remove = true;
+        }
 
         if (!remove) {
             switch (w.state) {
@@ -573,21 +656,37 @@ void World::move_workers() {
                         w.x = nx; w.y = ny; record_road_traffic(nx, ny);
                     } else {
                         w.x = w.job_x; w.y = w.job_y;
-                        w.path = hunting_path_from(w.job_x, w.job_y); w.path_position = 0;
-                        if (w.path.empty()) { w.work_ticks = 2; w.state = WorkerState::Hunting; }
-                        else w.state = WorkerState::HunterOutbound;
+                        if (w.role == WorkerRole::Hunter) {
+                            w.path = hunting_path_from(w.job_x, w.job_y); w.path_position = 0;
+                            if (w.path.empty()) { w.work_ticks = 2; w.state = WorkerState::Hunting; }
+                            else w.state = WorkerState::HunterOutbound;
+                        } else {
+                            w.work_ticks = 12;
+                            w.state = WorkerState::WorkingAtJob;
+                        }
                     }
                     break;
+
+                case WorkerState::WorkingAtJob:
+                    if (w.work_ticks > 0) --w.work_ticks;
+                    if (w.work_ticks == 0) {
+                        start_commute_home(w);
+                        if (w.path.empty()) remove = true;
+                    }
+                    break;
+
                 case WorkerState::HunterOutbound:
                     if (w.path_position < w.path.size()) {
                         const auto next = w.path[w.path_position++];
                         w.x = static_cast<int>(next % kWidth); w.y = static_cast<int>(next / kWidth);
                     } else { w.work_ticks = 3; w.state = WorkerState::Hunting; }
                     break;
+
                 case WorkerState::Hunting:
                     if (w.work_ticks > 0) --w.work_ticks;
                     if (w.work_ticks == 0) { w.payload_food = 5; w.state = WorkerState::HunterReturning; }
                     break;
+
                 case WorkerState::HunterReturning:
                     if (w.path_position > 0) {
                         const auto next = w.path[--w.path_position];
@@ -597,14 +696,12 @@ void World::move_workers() {
                         Tile& lodge = tile(w.job_x, w.job_y);
                         lodge.food_stock = static_cast<std::uint16_t>(std::min<int>(48, lodge.food_stock + w.payload_food));
                         w.payload_food = 0;
-                        w.path = road_path_between(w.home_x, w.home_y, w.job_x, w.job_y);
-                        std::reverse(w.path.begin(), w.path.end());
-                        w.path_position = 0;
-                        w.state = WorkerState::CommutingHome;
+                        start_commute_home(w);
+                        if (w.path.empty()) remove = true;
                     }
                     break;
+
                 case WorkerState::CommutingHome:
-                    if (w.path.empty()) { remove = true; break; }
                     if (w.path_position < w.path.size()) {
                         const auto next = w.path[w.path_position++];
                         const int nx = static_cast<int>(next % kWidth), ny = static_cast<int>(next / kWidth);
@@ -614,6 +711,7 @@ void World::move_workers() {
                         w.x = w.home_x; w.y = w.home_y; w.work_ticks = 2; w.state = WorkerState::RestingAtHome;
                     }
                     break;
+
                 case WorkerState::RestingAtHome:
                     if (w.work_ticks > 0) --w.work_ticks;
                     if (w.work_ticks == 0) {
@@ -628,6 +726,7 @@ void World::move_workers() {
                     break;
             }
         }
+
         if (remove) {
             release_worker(w);
             workers_.erase(workers_.begin() + static_cast<std::ptrdiff_t>(i));
@@ -635,53 +734,12 @@ void World::move_workers() {
     }
 }
 
-int World::pending_goods_for(int target_x, int target_y, Resource resource) const {
-    int total = 0;
-    for (const auto& g : goods_agents_) {
-        if (g.target_x == target_x && g.target_y == target_y && g.resource == resource) total += g.amount;
-    }
-    return total;
-}
-
-bool World::has_pending_delivery(int target_x, int target_y, Resource resource) const {
-    return pending_goods_for(target_x, target_y, resource) > 0;
-}
-
-bool World::spawn_goods_agent(int source_x, int source_y, int target_x, int target_y, Resource resource, int amount) {
-    if (amount <= 0 || goods_agents_.size() >= 128U) return false;
-    auto path = road_path_between(source_x, source_y, target_x, target_y);
-    if (path.empty()) return false;
-
-    Tile& source = tile(source_x, source_y);
-    int available = 0;
-    if (resource == Resource::Clay) available = source.clay_stock;
-    else if (resource == Resource::Pottery) available = source.pottery_stock;
-    else available = source.food_stock;
-    amount = std::min(amount, available);
-    if (amount <= 0) return false;
-
-    if (resource == Resource::Clay) source.clay_stock = static_cast<std::uint16_t>(source.clay_stock - amount);
-    else if (resource == Resource::Pottery) source.pottery_stock = static_cast<std::uint16_t>(source.pottery_stock - amount);
-    else source.food_stock = static_cast<std::uint16_t>(source.food_stock - amount);
-
-    GoodsAgent g;
-    g.source_x = source_x; g.source_y = source_y;
-    g.target_x = target_x; g.target_y = target_y;
-    g.resource = resource; g.amount = static_cast<std::uint8_t>(amount);
-    g.road_path = std::move(path);
-    const auto start = g.road_path.front();
-    g.x = static_cast<int>(start % kWidth); g.y = static_cast<int>(start / kWidth);
-    record_road_traffic(g.x, g.y);
-    goods_agents_.push_back(std::move(g));
-    return true;
-}
-
 void World::queue_goods_deliveries() {
     if (goods_agents_.size() >= 128U) return;
 
     for (int py = 0; py < kHeight; ++py) for (int px = 0; px < kWidth; ++px) {
         Tile& potter = tile(px, py);
-        if (potter.structure != Structure::Potter || !has_road_access(px, py)) continue;
+        if (potter.structure != Structure::Potter || active_workers_for_job(px, py) == 0) continue;
         const int incoming = pending_goods_for(px, py, Resource::Clay);
         if (static_cast<int>(potter.clay_stock) + incoming >= 12) continue;
         bool dispatched = false;
@@ -695,7 +753,7 @@ void World::queue_goods_deliveries() {
 
     for (int my = 0; my < kHeight; ++my) for (int mx = 0; mx < kWidth; ++mx) {
         Tile& market = tile(mx, my);
-        if (market.structure != Structure::Market || !has_road_access(mx, my)) continue;
+        if (market.structure != Structure::Market || active_workers_for_job(mx, my) == 0) continue;
         const int incoming = pending_goods_for(mx, my, Resource::Pottery);
         if (static_cast<int>(market.pottery_stock) + incoming >= 16) continue;
         bool dispatched = false;
@@ -715,7 +773,7 @@ void World::queue_goods_deliveries() {
         bool dispatched = false;
         for (int my = 0; my < kHeight && !dispatched; ++my) for (int mx = 0; mx < kWidth && !dispatched; ++mx) {
             Tile& market = tile(mx, my);
-            if (market.structure != Structure::Market || market.pottery_stock == 0) continue;
+            if (market.structure != Structure::Market || market.pottery_stock == 0 || active_workers_for_job(mx, my) == 0) continue;
             if (!within_delivery_range(hx, hy, mx, my)) continue;
             dispatched = spawn_goods_agent(mx, my, hx, hy, Resource::Pottery,
                 std::min<int>(2, 4 - static_cast<int>(house.pottery_stock) - incoming));
@@ -762,19 +820,19 @@ void World::move_goods() {
 
 void World::tick() {
     ++ticks_;
-    produce_food();
-    produce_clay();
     move_workers();
     move_goods();
+    create_immigration();
+    move_immigrants();
+    recruit_workers();
+    produce_food();
+    produce_clay();
     produce_pottery();
     move_food_to_granaries();
     move_food_to_markets();
     feed_houses();
     consume_household_goods();
     update_housing();
-    create_immigration();
-    move_immigrants();
-    recruit_workers();
     queue_goods_deliveries();
 }
 
@@ -815,11 +873,24 @@ const char* World::structure_name(Structure s) {
 const char* World::worker_state_name(WorkerState s) {
     switch (s) {
         case WorkerState::CommutingToJob: return "TO JOB";
+        case WorkerState::WorkingAtJob: return "WORKING";
         case WorkerState::HunterOutbound: return "HUNTER OUT";
         case WorkerState::Hunting: return "HUNTING";
         case WorkerState::HunterReturning: return "HUNTER RETURN";
         case WorkerState::CommutingHome: return "TO HOME";
         case WorkerState::RestingAtHome: return "HOME";
+    }
+    return "?";
+}
+
+const char* World::worker_role_name(WorkerRole r) {
+    switch (r) {
+        case WorkerRole::Hunter: return "HUNTER";
+        case WorkerRole::Farmer: return "FARMER";
+        case WorkerRole::ClayWorker: return "CLAY WORKER";
+        case WorkerRole::Potter: return "POTTER";
+        case WorkerRole::GranaryWorker: return "GRANARY WORKER";
+        case WorkerRole::MarketWorker: return "MARKET WORKER";
     }
     return "?";
 }
