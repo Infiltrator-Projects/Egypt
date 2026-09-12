@@ -12,6 +12,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate authored graphical UI surfaces
+        run: |
+          python3 tools/build_hud_assets.py build-ui
+          printf '%s  %s\n' 'd16206ec528caa645a5f70ca2b24020c47304d6f00e823b0690c373605609218' 'build-ui/hud_chrome.e8p' | sha256sum -c -
+          printf '%s  %s\n' 'ebe86b2076ca98cd2bf09d14aa8ab857d6bceea384074c65b0bbcfe7ff6eb25f' 'build-ui/hud_glyphs.e8p' | sha256sum -c -
+          printf '%s  %s\n' 'a90d9a515e9613e4e4e13b6b61592d115de89ec44375313b669741a9f5df3c14' 'build-ui/tool_icons.e8p' | sha256sum -c -
+
       - name: Configure without host backend
         run: cmake -S . -B build-core -DCMAKE_BUILD_TYPE=Release -DEGYPT_HOST_BACKEND=none
 
