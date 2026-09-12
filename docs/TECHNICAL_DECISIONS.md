@@ -177,3 +177,5 @@ Framebuffer primitives remain useful internally for rasterisation, masks, select
 The normal game must not drift toward a CLI, terminal, DOS utility, native desktop form or debug-tool appearance. In particular, large scaled 5×7 bitmap lettering, generic outlined rectangular buttons, system-looking controls and procedurally assembled pseudo-ornament are not acceptable substitutes for final graphical assets.
 
 When the Pharaoh/reference material clearly shows an element as illustrated UI artwork, Egypt should treat that evidence as authoritative for the presentation approach: build an original graphical asset serving the same visual/function role rather than approximating it with text and geometric primitives.
+
+The deeper design philosophy, composition model, review test and implementation consequences are defined in `docs/GRAPHICAL_SCREEN_ARCHITECTURE.md`. That document is authoritative for interpreting this decision.
