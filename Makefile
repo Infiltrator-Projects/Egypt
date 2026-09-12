@@ -9,7 +9,7 @@ MENU_PARTS := \
 	assets/menu_hd_01.b64 assets/menu_hd_01_tail.b64 \
 	assets/menu_hd_02.b64 assets/menu_hd_03.b64 assets/menu_hd_04.b64 \
 	assets/menu_hd_05a.b64 assets/menu_hd_05b0.b64 assets/menu_hd_05b1.b64 \
-	assets/menu_hd_05.b64
+	assets/menu_hd_05b1_tail.b64 assets/menu_hd_05.b64
 
 .PHONY: all configure run clean menu-asset
 
@@ -27,7 +27,7 @@ $(MENU_ASSET): $(MENU_PARTS)
 		cat assets/menu_hd_02.b64; \
 		cat assets/menu_hd_03.b64; \
 		head -c 12000 assets/menu_hd_04.b64; \
-		cat assets/menu_hd_05a.b64 assets/menu_hd_05b0.b64 assets/menu_hd_05b1.b64; \
+		cat assets/menu_hd_05a.b64 assets/menu_hd_05b0.b64 assets/menu_hd_05b1.b64 assets/menu_hd_05b1_tail.b64; \
 		cat assets/menu_hd_05.b64; \
 	} | base64 -d > $(MENU_ASSET).tmp
 	@test "$$(stat -c%s $(MENU_ASSET).tmp)" = "54800" || { echo 'Egypt HD menu asset has the wrong size'; rm -f $(MENU_ASSET).tmp; exit 1; }
