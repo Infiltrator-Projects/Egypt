@@ -33,7 +33,19 @@ struct Rect {
 };
 
 enum class Screen { Menu, Game, Settings };
-enum class Tool { Inspect, Road, House, Farm, Granary, Market, ClayPit, Potter, Bulldoze };
+enum class Tool {
+    Inspect,
+    Road,
+    House,
+    Farm,
+    Granary,
+    Market,
+    Well,
+    HuntingLodge,
+    ClayPit,
+    Potter,
+    Bulldoze
+};
 
 class Framebuffer {
 public:
@@ -64,13 +76,13 @@ public:
     }
 
     void blend_rect(Rect r, Color c, std::uint8_t alpha) {
-        const unsigned inverse = 255U - alpha;
+        const unsigned inv = 255U - alpha;
         for (int y = std::max(0, r.y); y < std::min(h_, r.y + r.h); ++y) {
             for (int x = std::max(0, r.x); x < std::min(w_, r.x + r.w); ++x) {
                 Color& d = pixels_[static_cast<std::size_t>(y * w_ + x)];
-                d.r = static_cast<std::uint8_t>((d.r * inverse + c.r * alpha) / 255U);
-                d.g = static_cast<std::uint8_t>((d.g * inverse + c.g * alpha) / 255U);
-                d.b = static_cast<std::uint8_t>((d.b * inverse + c.b * alpha) / 255U);
+                d.r = static_cast<std::uint8_t>((d.r * inv + c.r * alpha) / 255U);
+                d.g = static_cast<std::uint8_t>((d.g * inv + c.g * alpha) / 255U);
+                d.b = static_cast<std::uint8_t>((d.b * inv + c.b * alpha) / 255U);
             }
         }
     }
@@ -78,13 +90,13 @@ public:
     void line(int x0, int y0, int x1, int y1, Color c) {
         int dx = std::abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
         int dy = -std::abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
-        int error = dx + dy;
+        int err = dx + dy;
         for (;;) {
             pixel(x0, y0, c);
             if (x0 == x1 && y0 == y1) break;
-            const int e2 = 2 * error;
-            if (e2 >= dy) { error += dy; x0 += sx; }
-            if (e2 <= dx) { error += dx; y0 += sy; }
+            const int e2 = 2 * err;
+            if (e2 >= dy) { err += dy; x0 += sx; }
+            if (e2 <= dx) { err += dx; y0 += sy; }
         }
     }
 
@@ -149,9 +161,9 @@ public:
         auto mix = [](std::uint8_t a, std::uint8_t b, float t) { return float(a) + (float(b) - float(a)) * t; };
         const Color a = at(x0, y0), b = at(x1, y0), c = at(x0, y1), d = at(x1, y1);
         return {
-            static_cast<std::uint8_t>(std::clamp(mix(static_cast<std::uint8_t>(mix(a.r, b.r, fx)), static_cast<std::uint8_t>(mix(c.r, d.r, fx)), fy), 0.0f, 255.0f)),
-            static_cast<std::uint8_t>(std::clamp(mix(static_cast<std::uint8_t>(mix(a.g, b.g, fx)), static_cast<std::uint8_t>(mix(c.g, d.g, fx)), fy), 0.0f, 255.0f)),
-            static_cast<std::uint8_t>(std::clamp(mix(static_cast<std::uint8_t>(mix(a.b, b.b, fx)), static_cast<std::uint8_t>(mix(c.b, d.b, fx)), fy), 0.0f, 255.0f))
+            static_cast<std::uint8_t>(std::clamp(mix(static_cast<std::uint8_t>(mix(a.r,b.r,fx)), static_cast<std::uint8_t>(mix(c.r,d.r,fx)), fy), 0.0f, 255.0f)),
+            static_cast<std::uint8_t>(std::clamp(mix(static_cast<std::uint8_t>(mix(a.g,b.g,fx)), static_cast<std::uint8_t>(mix(c.g,d.g,fx)), fy), 0.0f, 255.0f)),
+            static_cast<std::uint8_t>(std::clamp(mix(static_cast<std::uint8_t>(mix(a.b,b.b,fx)), static_cast<std::uint8_t>(mix(c.b,d.b,fx)), fy), 0.0f, 255.0f))
         };
     }
 
@@ -270,7 +282,6 @@ public:
             return;
         }
         if (screen_ == Screen::Settings || screen_ != Screen::Game) return;
-
         const int step = 48;
         if (key == XK_Left || key == XK_a || key == XK_A) cam_.pan_x += step;
         else if (key == XK_Right || key == XK_d || key == XK_D) cam_.pan_x -= step;
@@ -341,7 +352,6 @@ public:
         }
         if (screen_ == Screen::Settings) { handle_settings_click(x, y); return; }
         if (main_menu_rect().contains(x, y)) { screen_ = Screen::Menu; dirty_ = true; return; }
-
         const auto tools = tool_buttons();
         for (int i = 0; i < static_cast<int>(tools.size()); ++i) {
             if (tools[i].contains(x, y)) {
@@ -350,7 +360,6 @@ public:
                 return;
             }
         }
-
         update_hover();
         if (!world_.in_bounds(hover_x_, hover_y_)) return;
         selected_x_ = hover_x_;
@@ -391,9 +400,9 @@ private:
     void reset_camera() { cam_.origin_x = fb_.width()/2 + 80; cam_.origin_y = 150; cam_.pan_x = -260; cam_.pan_y = -30; cam_.zoom_percent = 90; update_hover(); }
 
     bool over_game_ui(int x, int y) const {
-        if (y < 78 || y >= fb_.height() - 64) return true;
+        if (y < 78 || y >= fb_.height() - 104) return true;
         if (main_menu_rect().contains(x, y)) return true;
-        return Rect{fb_.width() - 340, 82, 330, 130}.contains(x, y);
+        return Rect{fb_.width() - 360, 82, 350, 154}.contains(x, y);
     }
 
     std::array<Rect,4> menu_buttons() const {
@@ -403,16 +412,18 @@ private:
 
     int menu_button_at(int x, int y) const {
         const auto buttons = menu_buttons();
-        for (int i = 0; i < 4; ++i) if (buttons[i].contains(x, y)) return i;
+        for (int i=0;i<4;++i) if (buttons[i].contains(x,y)) return i;
         return -1;
     }
 
     Rect main_menu_rect() const { return {fb_.width() - 210, 18, 190, 42}; }
 
-    std::array<Rect,9> tool_buttons() const {
-        std::array<Rect,9> result{};
-        const int x = 14, y = fb_.height() - 54, w = 112, h = 38, gap = 6;
-        for (int i = 0; i < 9; ++i) result[i] = {x + i * (w + gap), y, w, h};
+    std::array<Rect,11> tool_buttons() const {
+        std::array<Rect,11> result{};
+        const int w = 112, h = 36, gap = 6;
+        const int first_y = fb_.height() - 92;
+        for (int i=0;i<6;++i) result[i] = {14 + i * (w + gap), first_y, w, h};
+        for (int i=6;i<11;++i) result[i] = {14 + (i-6) * (w + gap), first_y + 42, w, h};
         return result;
     }
 
@@ -424,7 +435,7 @@ private:
     void button(Rect r, const std::string& label, bool enabled, bool active = false) {
         fb_.blend_rect(r, active ? hi : panel, active ? 235 : 205);
         fb_.rect(r, enabled ? gold : Color{90,78,65}, 2);
-        text(fb_, r.x + 8, r.y + 12, label, enabled ? pale : Color{115,105,92}, 2);
+        text(fb_, r.x + 7, r.y + 11, label, enabled ? pale : Color{115,105,92}, 2);
     }
 
     Structure tool_structure() const {
@@ -434,6 +445,8 @@ private:
             case Tool::Farm: return Structure::Farm;
             case Tool::Granary: return Structure::Granary;
             case Tool::Market: return Structure::Market;
+            case Tool::Well: return Structure::Well;
+            case Tool::HuntingLodge: return Structure::HuntingLodge;
             case Tool::ClayPit: return Structure::ClayPit;
             case Tool::Potter: return Structure::Potter;
             default: return Structure::Empty;
@@ -448,6 +461,8 @@ private:
             case Tool::Farm: return "FARM";
             case Tool::Granary: return "GRANARY";
             case Tool::Market: return "MARKET";
+            case Tool::Well: return "WELL";
+            case Tool::HuntingLodge: return "HUNT LODGE";
             case Tool::ClayPit: return "CLAY PIT";
             case Tool::Potter: return "POTTER";
             case Tool::Bulldoze: return "BULLDOZE";
@@ -456,332 +471,275 @@ private:
     }
 
     void update_hover() {
-        if (screen_ != Screen::Game) { hover_x_ = hover_y_ = -1; return; }
-        int x = 0, y = 0;
-        if (!cam_.pick(mx_, my_, x, y) || !world_.in_bounds(x, y)) { hover_x_ = hover_y_ = -1; return; }
-        hover_x_ = x;
-        hover_y_ = y;
+        if (screen_ != Screen::Game) { hover_x_=hover_y_=-1; return; }
+        int x=0,y=0;
+        if (!cam_.pick(mx_,my_,x,y) || !world_.in_bounds(x,y)) { hover_x_=hover_y_=-1; return; }
+        hover_x_=x;hover_y_=y;
     }
 
     Color terrain_color(Terrain terrain, int x, int y) const {
         Color c{};
         switch (terrain) {
-            case Terrain::Desert: c = {191,139,73}; break;
-            case Terrain::Floodplain: c = {113,132,77}; break;
-            case Terrain::Water: c = {43,110,139}; break;
-            case Terrain::Clay: c = {157,87,54}; break;
-            case Terrain::Reeds: c = {73,122,72}; break;
+            case Terrain::Desert: c={202,161,92}; break;
+            case Terrain::Floodplain: c={124,145,78}; break;
+            case Terrain::Water: c={38,104,129}; break;
+            case Terrain::Clay: c={150,84,55}; break;
+            case Terrain::Reeds: c={72,127,72}; break;
         }
-        const int jitter = ((x * 17 + y * 31) % 9) - 4;
-        auto add = [&](std::uint8_t value) { return static_cast<std::uint8_t>(std::clamp(int(value) + jitter, 0, 255)); };
-        return {add(c.r), add(c.g), add(c.b)};
+        const int jitter=((x*17+y*31)%9)-4;
+        auto add=[&](std::uint8_t v){return static_cast<std::uint8_t>(std::clamp(int(v)+jitter,0,255));};
+        return {add(c.r),add(c.g),add(c.b)};
     }
 
     void draw_block(IsoPoint p, int tw, int th, int height, Color top, Color left, Color right) {
-        const int hw = tw / 2, hh = th / 2;
-        const IsoPoint bt{p.x,p.y-hh}, br{p.x+hw,p.y}, bb{p.x,p.y+hh}, bl{p.x-hw,p.y};
-        const IsoPoint tt{bt.x,bt.y-height}, tr{br.x,br.y-height}, tb{bb.x,bb.y-height}, tl{bl.x,bl.y-height};
-        fb_.quad(bl,bb,tb,tl,left);
-        fb_.quad(bb,br,tr,tb,right);
-        fb_.quad(tt,tr,tb,tl,top);
+        const int hw=tw/2, hh=th/2;
+        const IsoPoint bt{p.x,p.y-hh},br{p.x+hw,p.y},bb{p.x,p.y+hh},bl{p.x-hw,p.y};
+        const IsoPoint tt{bt.x,bt.y-height},tr{br.x,br.y-height},tb{bb.x,bb.y-height},tl{bl.x,bl.y-height};
+        fb_.quad(bl,bb,tb,tl,left);fb_.quad(bb,br,tr,tb,right);fb_.quad(tt,tr,tb,tl,top);
+    }
+
+    bool high_house(int x,int y) const {
+        return world_.in_bounds(x,y) && world_.tile(x,y).structure==Structure::House && world_.tile(x,y).housing_level>=2;
+    }
+
+    bool merged_anchor(int x,int y) const {
+        if (!high_house(x,y)||!high_house(x+1,y)||!high_house(x,y+1)||!high_house(x+1,y+1)) return false;
+        const bool blocked_left = high_house(x-1,y) && high_house(x-1,y+1);
+        const bool blocked_up = high_house(x,y-1) && high_house(x+1,y-1);
+        return !blocked_left && !blocked_up;
+    }
+
+    bool merged_part(int x,int y) const {
+        for(int ay=y-1;ay<=y;++ay) for(int ax=x-1;ax<=x;++ax) {
+            if(!world_.in_bounds(ax,ay)) continue;
+            if(merged_anchor(ax,ay) && !(ax==x&&ay==y) && x>=ax&&x<=ax+1&&y>=ay&&y<=ay+1) return true;
+        }
+        return false;
     }
 
     void draw_house(const Tile& tile, IsoPoint p, int tw, int th) {
-        const int height = tile.population >= 6 ? 25 : tile.population >= 3 ? 21 : 16;
-        const int width = tile.population >= 6 ? tw * 4 / 5 : tw * 2 / 3;
-        const int depth = tile.population >= 6 ? th * 4 / 5 : th * 2 / 3;
-        draw_block(p, width, depth, height, {205,167,103}, {132,83,50}, {153,98,55});
-        fb_.fill_rect({p.x - 3, p.y - height + 5, 6, 11}, {67,49,37});
-        if (tile.population >= 4) {
-            fb_.fill_rect({p.x + 10, p.y - height + 6, 4, 5}, {65,94,99});
-            fb_.fill_rect({p.x - 15, p.y - height + 6, 4, 5}, {65,94,99});
-        }
-        if (tile.population >= 7) fb_.fill_rect({p.x - 10, p.y - height - 4, 20, 4}, {226,188,118});
-    }
-
-    void draw_farm(IsoPoint p, int tw, int th) {
-        fb_.diamond(p, tw * 9 / 10, th * 9 / 10, {107,126,61}, {107,126,61});
-        for (int i = -3; i <= 3; ++i) {
-            const int ox = i * std::max(2, tw / 12);
-            fb_.line(p.x + ox - tw/5, p.y + th/6, p.x + ox + tw/5, p.y - th/6, {70,91,45});
-        }
-        fb_.fill_rect({p.x - 3, p.y - 14, 6, 13}, {147,112,63});
-    }
-
-    void draw_granary(const Tile& tile, IsoPoint p, int tw, int th) {
-        draw_block(p, tw * 4 / 5, th * 4 / 5, 28, {208,173,105}, {124,83,54}, {151,98,59});
-        fb_.fill_rect({p.x - 13, p.y - 34, 26, 5}, {235,199,129});
-        fb_.fill_rect({p.x - 4, p.y - 21, 8, 13}, {75,54,39});
-        if (tile.food_stock > 0) {
-            const int bars = std::min<int>(4, (tile.food_stock + 15) / 16);
-            for (int i = 0; i < bars; ++i) fb_.fill_rect({p.x - 14 + i * 8, p.y - 42, 5, 5}, {224,185,83});
+        if(tile.housing_level==0) {
+            const int h=tile.population>=5?19:15;
+            draw_block(p,tw*2/3,th*2/3,h,{202,161,95},{129,78,46},{151,91,49});
+            fb_.fill_rect({p.x-3,p.y-h+5,6,10},{72,48,34});
+        } else if(tile.housing_level==1) {
+            draw_block(p,tw*4/5,th*4/5,25,{220,188,122},{146,91,55},{173,108,58});
+            fb_.fill_rect({p.x-4,p.y-19,8,13},{67,47,35});
+            fb_.fill_rect({p.x-16,p.y-24,5,6},{52,91,108});
+            fb_.fill_rect({p.x+11,p.y-24,5,6},{52,91,108});
+            fb_.fill_rect({p.x-12,p.y-31,24,4},{224,190,123});
+        } else {
+            draw_block(p,tw*9/10,th*9/10,31,{229,201,144},{157,101,65},{185,119,67});
+            fb_.fill_rect({p.x-5,p.y-23,10,16},{63,44,32});
+            fb_.fill_rect({p.x-19,p.y-29,6,7},{52,94,113});
+            fb_.fill_rect({p.x+13,p.y-29,6,7},{52,94,113});
+            fb_.fill_rect({p.x-16,p.y-38,32,5},{237,211,157});
+            fb_.fill_rect({p.x-2,p.y-45,4,8},{47,104,62});
         }
     }
 
-    void draw_market(const Tile& tile, IsoPoint p, int tw, int th) {
-        fb_.diamond(p, tw * 4 / 5, th * 4 / 5, {157,113,69}, {157,113,69});
-        const int y = p.y - 25;
-        fb_.line(p.x - 16, p.y - 3, p.x - 16, y, {79,55,41});
-        fb_.line(p.x + 16, p.y - 3, p.x + 16, y, {79,55,41});
-        fb_.fill_rect({p.x - 21, y - 5, 42, 7}, {157,52,42});
-        fb_.fill_rect({p.x - 21, y + 2, 42, 4}, {221,185,102});
-        if (tile.food_stock > 0) {
-            for (int i = 0; i < std::min<int>(5, tile.food_stock / 4 + 1); ++i) {
-                fb_.fill_rect({p.x - 14 + i * 7, p.y - 8, 4, 4}, {199,158,55});
-            }
-        }
+    void draw_merged_residence(int x,int y,int tw,int th) {
+        const IsoPoint a=cam_.project(x,y);
+        const IsoPoint b=cam_.project(x+1,y+1);
+        IsoPoint center{(a.x+b.x)/2,(a.y+b.y)/2+th/2};
+        draw_block(center,tw*17/10,th*17/10,42,{235,209,156},{160,100,62},{192,122,68});
+        fb_.fill_rect({center.x-8,center.y-31,16,22},{63,44,32});
+        fb_.fill_rect({center.x-30,center.y-38,8,8},{54,101,119});
+        fb_.fill_rect({center.x+22,center.y-38,8,8},{54,101,119});
+        fb_.fill_rect({center.x-29,center.y-52,58,6},{239,216,167});
+        fb_.fill_rect({center.x-3,center.y-61,6,9},{48,108,65});
     }
 
-    void draw_structure(const Tile& tile, IsoPoint p, int tw, int th) {
-        switch (tile.structure) {
+    void draw_farm(IsoPoint p,int tw,int th) {
+        fb_.diamond(p,tw*9/10,th*9/10,{106,128,61},{106,128,61});
+        for(int i=-3;i<=3;++i){const int ox=i*std::max(2,tw/12);fb_.line(p.x+ox-tw/5,p.y+th/6,p.x+ox+tw/5,p.y-th/6,{67,90,42});}
+        fb_.fill_rect({p.x-3,p.y-14,6,13},{148,111,62});
+    }
+
+    void draw_granary(const Tile& tile,IsoPoint p,int tw,int th) {
+        draw_block(p,tw*4/5,th*4/5,31,{216,184,117},{128,82,53},{157,99,58});
+        fb_.fill_rect({p.x-15,p.y-37,30,5},{240,208,143});
+        fb_.fill_rect({p.x-5,p.y-23,10,15},{75,53,37});
+        const int sacks=std::min<int>(5,(tile.food_stock+19)/20);
+        for(int i=0;i<sacks;++i)fb_.fill_rect({p.x-18+i*8,p.y-45,6,5},{222,177,72});
+    }
+
+    void draw_market(const Tile& tile,IsoPoint p,int tw,int th) {
+        fb_.diamond(p,tw*4/5,th*4/5,{156,112,68},{156,112,68});
+        const int y=p.y-25;fb_.line(p.x-16,p.y-3,p.x-16,y,{79,55,41});fb_.line(p.x+16,p.y-3,p.x+16,y,{79,55,41});
+        fb_.fill_rect({p.x-21,y-5,42,7},{157,52,42});fb_.fill_rect({p.x-21,y+2,42,4},{221,185,102});
+        for(int i=0;i<std::min<int>(5,tile.food_stock/4+1);++i)fb_.fill_rect({p.x-14+i*7,p.y-8,4,4},{199,158,55});
+    }
+
+    void draw_well(IsoPoint p,int tw,int th) {
+        fb_.diamond(p,tw*2/3,th*2/3,{170,145,91},{128,100,63});
+        fb_.diamond({p.x,p.y-2},tw/2,th/2,{55,119,145},{231,205,145});
+        fb_.fill_rect({p.x-15,p.y-23,4,22},{104,70,44});
+        fb_.fill_rect({p.x+11,p.y-23,4,22},{104,70,44});
+        fb_.fill_rect({p.x-15,p.y-25,30,4},{182,132,69});
+    }
+
+    void draw_hunting_lodge(const Tile& tile,IsoPoint p,int tw,int th) {
+        draw_block(p,tw*9/10,th*9/10,28,{171,119,67},{101,66,43},{128,79,45});
+        fb_.triangle(p.x-22,p.y-29,p.x,p.y-45,p.x+22,p.y-29,{101,57,35});
+        fb_.fill_rect({p.x-4,p.y-21,8,14},{67,44,31});
+        if(tile.food_stock>0) fb_.fill_rect({p.x+14,p.y-13,8,6},{163,49,38});
+    }
+
+    void draw_structure_at(int x,int y,const Tile& tile,IsoPoint p,int tw,int th) {
+        switch(tile.structure) {
             case Structure::Empty: break;
-            case Structure::Road:
-                fb_.diamond(p, tw * 3 / 4, th * 3 / 4, {127,95,61}, {127,95,61});
-                break;
+            case Structure::Road: fb_.diamond(p,tw*3/4,th*3/4,{136,109,74},{136,109,74}); break;
             case Structure::House:
-                draw_house(tile, p, tw, th);
+                if(merged_part(x,y)) break;
+                if(merged_anchor(x,y)) draw_merged_residence(x,y,tw,th); else draw_house(tile,p,tw,th);
                 break;
-            case Structure::Farm:
-                draw_farm(p, tw, th);
-                break;
-            case Structure::Granary:
-                draw_granary(tile, p, tw, th);
-                break;
-            case Structure::Market:
-                draw_market(tile, p, tw, th);
-                break;
+            case Structure::Farm: draw_farm(p,tw,th); break;
+            case Structure::Granary: draw_granary(tile,p,tw,th); break;
+            case Structure::Market: draw_market(tile,p,tw,th); break;
+            case Structure::Well: draw_well(p,tw,th); break;
+            case Structure::HuntingLodge: draw_hunting_lodge(tile,p,tw,th); break;
             case Structure::ClayPit:
-                fb_.diamond({p.x,p.y+2}, tw*2/3, th/2, {91,54,43}, {66,42,33});
-                fb_.fill_rect({p.x - 7, p.y - 5, 14, 3}, {183,113,72});
-                break;
+                fb_.diamond({p.x,p.y+2},tw*2/3,th/2,{91,54,43},{66,42,33});fb_.fill_rect({p.x-7,p.y-5,14,3},{183,113,72});break;
             case Structure::Potter:
-                draw_block(p, tw*3/4, th*3/4, 24, {165,122,79}, {111,71,48}, {133,82,51});
-                fb_.fill_rect({p.x+8,p.y-39,5,18},{72,54,45});
-                break;
+                draw_block(p,tw*3/4,th*3/4,24,{165,122,79},{111,71,48},{133,82,51});fb_.fill_rect({p.x+8,p.y-39,5,18},{72,54,45});break;
+        }
+    }
+
+    void draw_person(IsoPoint p,Color clothes,Color skin,int offset=0,bool carrying=false) {
+        const int x=p.x+offset,y=p.y-8;
+        fb_.fill_rect({x-2,y-7,5,5},skin);
+        fb_.fill_rect({x-2,y-2,5,8},clothes);
+        fb_.pixel(x-3,y+6,{52,39,31});fb_.pixel(x+3,y+6,{52,39,31});
+        if(carrying) fb_.fill_rect({x+4,y-1,4,4},{180,55,42});
+    }
+
+    void draw_agents() {
+        for(const auto& a:world_.immigrants()) {
+            const IsoPoint p=cam_.project(a.x,a.y);
+            for(int i=0;i<a.group_size;++i) draw_person(p,{185,122,76},{166,111,77},(i-1)*5,false);
+        }
+        for(const auto& w:world_.workers()) {
+            const IsoPoint p=cam_.project(w.x,w.y);
+            const bool hunter=w.state==WorkerState::HunterOutbound||w.state==WorkerState::Hunting||w.state==WorkerState::HunterReturning;
+            const Color clothes=hunter?Color{79,101,49}:Color{186,145,91};
+            draw_person(p,clothes,{171,112,76},0,w.payload_food>0);
         }
     }
 
     void draw_menu() {
-        if (menu_.valid()) fb_.blit_cover(menu_); else fb_.clear({8,18,35});
+        if(menu_.valid())fb_.blit_cover(menu_);else fb_.clear({8,18,35});
         fb_.blend_rect({38,30,520,610},{5,4,4},112);
-        text(fb_,72,72,"EGYPT",gold,8);
-        text(fb_,74,151,"A LIVING CITY ON THE NILE",pale,3);
-        fb_.fill_rect({72,205,420,2},gold);
-        const auto buttons = menu_buttons();
-        button(buttons[0],"NEW GAME",true,buttons[0].contains(mx_,my_));
-        button(buttons[1],"CONTINUE",false);
-        button(buttons[2],"SETTINGS",true,buttons[2].contains(mx_,my_));
-        button(buttons[3],"QUIT",true,buttons[3].contains(mx_,my_));
-        if (!status_.empty()) text(fb_,72,570,status_,{210,192,160},2);
+        text(fb_,72,72,"EGYPT",gold,8);text(fb_,74,151,"A LIVING CITY ON THE NILE",pale,3);fb_.fill_rect({72,205,420,2},gold);
+        const auto b=menu_buttons();button(b[0],"NEW GAME",true,b[0].contains(mx_,my_));button(b[1],"CONTINUE",false);button(b[2],"SETTINGS",true,b[2].contains(mx_,my_));button(b[3],"QUIT",true,b[3].contains(mx_,my_));
+        if(!status_.empty())text(fb_,72,570,status_,{210,192,160},2);
     }
 
     void draw_settings() {
-        if (menu_.valid()) fb_.blit_cover(menu_); else fb_.clear({8,18,35});
-        fb_.blend_rect({fb_.width()/2-390,74,780,fb_.height()-122},{6,5,4},220);
-        fb_.rect({fb_.width()/2-390,74,780,fb_.height()-122},gold,2);
-        text(fb_,fb_.width()/2-180,104,"DISPLAY OPTIONS",gold,4);
-        text(fb_,fb_.width()/2-120,192,"WINDOW SIZE",pale,2);
-        const auto rb = resolution_buttons();
-        for (int i=0;i<3;++i) button(rb[i],std::to_string(kResolutions[i][0])+"X"+std::to_string(kResolutions[i][1]),true,i==resolution_index_);
-        text(fb_,fb_.width()/2-120,306,"MAP SCROLLING",pale,2);
-        button(edge_scroll_rect(),std::string("EDGE SCROLL  ")+(edge_scroll_?"ON":"OFF"),true,edge_scroll_);
-        text(fb_,fb_.width()/2-114,408,"SCROLL SPEED",pale,2);
-        const auto sb = speed_buttons();
-        button(sb[0],"SLOW",true,scroll_speed_px_<500);
-        button(sb[1],"NORMAL",true,scroll_speed_px_>=500&&scroll_speed_px_<850);
-        button(sb[2],"FAST",true,scroll_speed_px_>=850);
-        text(fb_,fb_.width()/2-300,520,"RIGHT OR MIDDLE DRAG PANS THE MAP",pale,2);
-        text(fb_,fb_.width()/2-300,546,"MOUSE WHEEL ZOOMS   ARROWS OR WASD PAN",pale,2);
-        button(settings_back(),"BACK",true,settings_back().contains(mx_,my_));
+        if(menu_.valid())fb_.blit_cover(menu_);else fb_.clear({8,18,35});
+        fb_.blend_rect({fb_.width()/2-390,74,780,fb_.height()-122},{6,5,4},220);fb_.rect({fb_.width()/2-390,74,780,fb_.height()-122},gold,2);
+        text(fb_,fb_.width()/2-180,104,"DISPLAY OPTIONS",gold,4);text(fb_,fb_.width()/2-120,192,"WINDOW SIZE",pale,2);
+        const auto rb=resolution_buttons();for(int i=0;i<3;++i)button(rb[i],std::to_string(kResolutions[i][0])+"X"+std::to_string(kResolutions[i][1]),true,i==resolution_index_);
+        text(fb_,fb_.width()/2-120,306,"MAP SCROLLING",pale,2);button(edge_scroll_rect(),std::string("EDGE SCROLL  ")+(edge_scroll_?"ON":"OFF"),true,edge_scroll_);
+        text(fb_,fb_.width()/2-114,408,"SCROLL SPEED",pale,2);const auto sb=speed_buttons();button(sb[0],"SLOW",true,scroll_speed_px_<500);button(sb[1],"NORMAL",true,scroll_speed_px_>=500&&scroll_speed_px_<850);button(sb[2],"FAST",true,scroll_speed_px_>=850);
+        text(fb_,fb_.width()/2-300,520,"RIGHT OR MIDDLE DRAG PANS THE MAP",pale,2);text(fb_,fb_.width()/2-300,546,"MOUSE WHEEL ZOOMS   ARROWS OR WASD PAN",pale,2);button(settings_back(),"BACK",true,settings_back().contains(mx_,my_));
     }
 
-    void handle_settings_click(int x, int y) {
-        if (settings_back().contains(x,y)) { screen_=Screen::Menu; dirty_=true; return; }
-        const auto rb=resolution_buttons();
-        for (int i=0;i<3;++i) if (rb[i].contains(x,y)) { resolution_index_=i;requested_w_=kResolutions[i][0];requested_h_=kResolutions[i][1];resize_pending_=true;dirty_=true;return; }
-        if (edge_scroll_rect().contains(x,y)) { edge_scroll_=!edge_scroll_;dirty_=true;return; }
-        const auto sb=speed_buttons();
-        if (sb[0].contains(x,y)) scroll_speed_px_=360.0;
-        else if (sb[1].contains(x,y)) scroll_speed_px_=620.0;
-        else if (sb[2].contains(x,y)) scroll_speed_px_=980.0;
-        else return;
-        dirty_=true;
+    void handle_settings_click(int x,int y) {
+        if(settings_back().contains(x,y)){screen_=Screen::Menu;dirty_=true;return;}
+        const auto rb=resolution_buttons();for(int i=0;i<3;++i)if(rb[i].contains(x,y)){resolution_index_=i;requested_w_=kResolutions[i][0];requested_h_=kResolutions[i][1];resize_pending_=true;dirty_=true;return;}
+        if(edge_scroll_rect().contains(x,y)){edge_scroll_=!edge_scroll_;dirty_=true;return;}
+        const auto sb=speed_buttons();if(sb[0].contains(x,y))scroll_speed_px_=360.0;else if(sb[1].contains(x,y))scroll_speed_px_=620.0;else if(sb[2].contains(x,y))scroll_speed_px_=980.0;else return;dirty_=true;
     }
 
     void draw_game() {
         fb_.clear({47,34,28});
         fb_.fill_rect({0,0,fb_.width(),78},panel);
-        text(fb_,20,12,"SETTLEMENT ON THE NILE",gold,3);
-        const std::string stats = "POP " + std::to_string(world_.population()) +
-            "   FOOD " + std::to_string(world_.total_food()) +
-            "   TREASURY " + std::to_string(world_.treasury()) +
-            "   TOOL " + tool_name();
-        text(fb_,20,48,stats,pale,2);
-        button(main_menu_rect(),"MAIN MENU",true,main_menu_rect().contains(mx_,my_));
+        text(fb_,20,11,"SETTLEMENT ON THE NILE",gold,3);
+        const std::string stats="POP "+std::to_string(world_.population())+
+            "  IMM "+std::to_string(world_.immigrants_in_transit())+
+            "  EMP "+std::to_string(world_.employed_population())+
+            "  FOOD "+std::to_string(world_.total_food())+
+            "  TREASURY "+std::to_string(world_.treasury());
+        text(fb_,20,47,stats,pale,2);button(main_menu_rect(),"MAIN MENU",true,main_menu_rect().contains(mx_,my_));
 
-        const int tw=cam_.tile_w(), th=cam_.tile_h();
-        for (int sum=0;sum<World::kWidth+World::kHeight-1;++sum) {
-            for (int y=0;y<World::kHeight;++y) {
-                const int x=sum-y;
-                if (!world_.in_bounds(x,y)) continue;
-                const IsoPoint p=cam_.project(x,y);
-                if (p.x<-tw||p.x>fb_.width()+tw||p.y<70-th||p.y>fb_.height()+th) continue;
-                const Tile& tile=world_.tile(x,y);
-                const Color ground=terrain_color(tile.terrain,x,y);
-                fb_.diamond(p,tw,th,ground,ground);
-                if (tile.terrain==Terrain::Water && ((x+y)&3)==0) {
-                    fb_.line(p.x-tw/5,p.y-1,p.x+tw/5,p.y-1,{70,139,159});
-                }
-                if (tile.terrain==Terrain::Reeds) {
-                    for(int k=-2;k<=2;++k) fb_.line(p.x+k*3,p.y,p.x+k*3+1,p.y-10,{40,82,43});
-                }
-                draw_structure(tile,p,tw,th);
+        const int tw=cam_.tile_w(),th=cam_.tile_h();
+        for(int sum=0;sum<World::kWidth+World::kHeight-1;++sum){
+            for(int y=0;y<World::kHeight;++y){
+                const int x=sum-y;if(!world_.in_bounds(x,y))continue;
+                const IsoPoint p=cam_.project(x,y);if(p.x<-tw||p.x>fb_.width()+tw||p.y<70-th||p.y>fb_.height()+th)continue;
+                const Tile& tile=world_.tile(x,y);const Color ground=terrain_color(tile.terrain,x,y);fb_.diamond(p,tw,th,ground,ground);
+                if(tile.terrain==Terrain::Water&&((x+y)&3)==0)fb_.line(p.x-tw/5,p.y-1,p.x+tw/5,p.y-1,{73,143,163});
+                if(tile.terrain==Terrain::Reeds)for(int k=-2;k<=2;++k)fb_.line(p.x+k*3,p.y,p.x+k*3+1,p.y-10,{38,83,43});
+                draw_structure_at(x,y,tile,p,tw,th);
             }
         }
+        draw_agents();
 
-        if (world_.in_bounds(hover_x_,hover_y_)) {
-            const IsoPoint p=cam_.project(hover_x_,hover_y_);
-            fb_.diamond_outline(p,tw,th,{255,230,130});
-        }
+        if(world_.in_bounds(hover_x_,hover_y_)){const IsoPoint p=cam_.project(hover_x_,hover_y_);fb_.diamond_outline(p,tw,th,{255,230,130});}
 
         const auto tools=tool_buttons();
-        const char* labels[9]={"INSPECT","ROAD","HOUSE","FARM","GRANARY","MARKET","CLAY PIT","POTTER","BULLDOZE"};
-        for(int i=0;i<9;++i) button(tools[i],labels[i],true,static_cast<int>(tool_)==i);
+        const char* labels[11]={"INSPECT","ROAD","HOUSE","FARM","GRANARY","MARKET","WELL","HUNT LODGE","CLAY PIT","POTTER","BULLDOZE"};
+        for(int i=0;i<11;++i)button(tools[i],labels[i],true,static_cast<int>(tool_)==i);
 
-        const Rect info{fb_.width()-340,88,322,118};
-        fb_.blend_rect(info,{8,7,6},205);
-        fb_.rect(info,gold,1);
-        if (world_.in_bounds(selected_x_,selected_y_)) {
+        const Rect info{fb_.width()-360,88,342,142};fb_.blend_rect(info,{8,7,6},205);fb_.rect(info,gold,1);
+        if(world_.in_bounds(selected_x_,selected_y_)){
             const Tile& tile=world_.tile(selected_x_,selected_y_);
-            text(fb_,info.x+16,info.y+13,"TILE "+std::to_string(selected_x_)+","+std::to_string(selected_y_),pale,2);
-            text(fb_,info.x+16,info.y+35,World::terrain_name(tile.terrain),gold,2);
-            text(fb_,info.x+16,info.y+57,World::structure_name(tile.structure),gold,2);
-            if (tile.structure==Structure::House) {
-                text(fb_,info.x+16,info.y+79,"POP "+std::to_string(tile.population)+"   FOOD "+std::to_string(tile.food_stock),pale,2);
-            } else if (tile.structure==Structure::Farm||tile.structure==Structure::Granary||tile.structure==Structure::Market) {
-                text(fb_,info.x+16,info.y+79,"FOOD STOCK "+std::to_string(tile.food_stock),pale,2);
+            text(fb_,info.x+14,info.y+12,"TILE "+std::to_string(selected_x_)+","+std::to_string(selected_y_),pale,2);
+            text(fb_,info.x+14,info.y+34,World::terrain_name(tile.terrain),gold,2);text(fb_,info.x+14,info.y+56,World::structure_name(tile.structure),gold,2);
+            if(tile.structure==Structure::House){
+                text(fb_,info.x+14,info.y+78,"POP "+std::to_string(tile.population)+"/"+std::to_string(world_.house_capacity(selected_x_,selected_y_))+"  JOB "+std::to_string(tile.employed),pale,2);
+                text(fb_,info.x+14,info.y+100,"LEVEL "+std::to_string(tile.housing_level)+"  WATER "+(world_.has_well_service(selected_x_,selected_y_)?"YES":"NO"),pale,2);
+                text(fb_,info.x+14,info.y+122,"FOOD "+std::to_string(tile.food_stock),pale,2);
+            }else if(tile.structure==Structure::Farm||tile.structure==Structure::Granary||tile.structure==Structure::Market||tile.structure==Structure::HuntingLodge){
+                text(fb_,info.x+14,info.y+82,"FOOD STOCK "+std::to_string(tile.food_stock),pale,2);
             }
-        } else {
-            text(fb_,info.x+16,info.y+42,"CLICK A TILE TO INSPECT",pale,2);
-        }
+        }else text(fb_,info.x+14,info.y+48,"CLICK A TILE TO INSPECT",pale,2);
 
-        text(fb_,18,fb_.height()-82,"FOOD GATES IMMIGRATION: FARM > GRANARY > MARKET > HOUSE",pale,2);
+        text(fb_,18,fb_.height()-116,"VISIBLE CITY: IMMIGRANTS > HOMES > JOBS > HUNTERS > GRANARY > MARKET",pale,2);
     }
 };
 
 class X11App {
 public:
     X11App(int w,int h):fb_(w,h),game_(fb_){
-        display_=XOpenDisplay(nullptr);
-        if(!display_) throw std::runtime_error("Unable to open X11 display");
-        screen_=DefaultScreen(display_);
-        window_=XCreateSimpleWindow(display_,RootWindow(display_,screen_),100,100,w,h,0,BlackPixel(display_,screen_),BlackPixel(display_,screen_));
-        XStoreName(display_,window_,"Egypt");
-        XSelectInput(display_,window_,ExposureMask|KeyPressMask|ButtonPressMask|ButtonReleaseMask|PointerMotionMask|StructureNotifyMask);
-        delete_atom_=XInternAtom(display_,"WM_DELETE_WINDOW",False);
-        XSetWMProtocols(display_,window_,&delete_atom_,1);
-        gc_=XCreateGC(display_,window_,0,nullptr);
-        XMapWindow(display_,window_);
-        recreate(w,h);
-        if(!infiltratr_fixed_step_configure(&scheduler_,1000000000ULL,4ULL,500000000ULL,8ULL)) throw std::runtime_error("Common fixed-step scheduler configuration failed");
-        infiltratr_fixed_step_reset(&scheduler_,now_ns());
-        last_frame_ns_=now_ns();
+        display_=XOpenDisplay(nullptr);if(!display_)throw std::runtime_error("Unable to open X11 display");
+        screen_=DefaultScreen(display_);window_=XCreateSimpleWindow(display_,RootWindow(display_,screen_),100,100,w,h,0,BlackPixel(display_,screen_),BlackPixel(display_,screen_));
+        XStoreName(display_,window_,"Egypt");XSelectInput(display_,window_,ExposureMask|KeyPressMask|ButtonPressMask|ButtonReleaseMask|PointerMotionMask|StructureNotifyMask);
+        delete_atom_=XInternAtom(display_,"WM_DELETE_WINDOW",False);XSetWMProtocols(display_,window_,&delete_atom_,1);gc_=XCreateGC(display_,window_,0,nullptr);XMapWindow(display_,window_);recreate(w,h);
+        if(!infiltratr_fixed_step_configure(&scheduler_,1000000000ULL,4ULL,500000000ULL,8ULL))throw std::runtime_error("Common fixed-step scheduler configuration failed");
+        infiltratr_fixed_step_reset(&scheduler_,now_ns());last_frame_ns_=now_ns();
     }
 
-    ~X11App(){
-        if(image_){std::free(image_->data);image_->data=nullptr;XDestroyImage(image_);}
-        if(gc_)XFreeGC(display_,gc_);
-        if(window_)XDestroyWindow(display_,window_);
-        if(display_)XCloseDisplay(display_);
-    }
+    ~X11App(){if(image_){std::free(image_->data);image_->data=nullptr;XDestroyImage(image_);}if(gc_)XFreeGC(display_,gc_);if(window_)XDestroyWindow(display_,window_);if(display_)XCloseDisplay(display_);}
 
     int run(){
         while(game_.running()){
-            while(XPending(display_)>0){
-                XEvent event;XNextEvent(display_,&event);
-                switch(event.type){
-                    case Expose: game_.resize(); break;
-                    case ConfigureNotify:
-                        if(event.xconfigure.width!=fb_.width()||event.xconfigure.height!=fb_.height()){
-                            fb_.resize(event.xconfigure.width,event.xconfigure.height);
-                            recreate(event.xconfigure.width,event.xconfigure.height);
-                            game_.resize();
-                        }
-                        break;
-                    case MotionNotify: game_.on_motion(event.xmotion.x,event.xmotion.y); break;
-                    case ButtonPress: game_.on_button_press(event.xbutton.button,event.xbutton.x,event.xbutton.y); break;
-                    case ButtonRelease: game_.on_button_release(event.xbutton.button,event.xbutton.x,event.xbutton.y); break;
-                    case KeyPress: game_.on_key(XLookupKeysym(&event.xkey,0)); break;
-                    case ClientMessage: if(static_cast<Atom>(event.xclient.data.l[0])==delete_atom_) return 0; break;
-                    default: break;
-                }
-            }
-
-            const std::uint64_t now=now_ns();
-            const double dt=static_cast<double>(now-last_frame_ns_)/1000000000.0;
-            last_frame_ns_=now;
-            game_.frame(std::clamp(dt,0.0,0.05));
-            int rw=0,rh=0;
-            if(game_.take_resize_request(rw,rh)) XResizeWindow(display_,window_,static_cast<unsigned>(rw),static_cast<unsigned>(rh));
-            InfiltratrFixedStepResult result{};
-            if(infiltratr_fixed_step_advance(&scheduler_,now,&result)) {
-                for(std::uint64_t i=0;i<result.steps_to_run;++i) game_.tick();
-            }
-            if(game_.dirty()) { game_.draw(); present(); game_.rendered(); }
-            std::this_thread::sleep_for(std::chrono::milliseconds(8));
+            while(XPending(display_)>0){XEvent event;XNextEvent(display_,&event);switch(event.type){
+                case Expose:game_.resize();break;
+                case ConfigureNotify:if(event.xconfigure.width!=fb_.width()||event.xconfigure.height!=fb_.height()){fb_.resize(event.xconfigure.width,event.xconfigure.height);recreate(event.xconfigure.width,event.xconfigure.height);game_.resize();}break;
+                case MotionNotify:game_.on_motion(event.xmotion.x,event.xmotion.y);break;
+                case ButtonPress:game_.on_button_press(event.xbutton.button,event.xbutton.x,event.xbutton.y);break;
+                case ButtonRelease:game_.on_button_release(event.xbutton.button,event.xbutton.x,event.xbutton.y);break;
+                case KeyPress:game_.on_key(XLookupKeysym(&event.xkey,0));break;
+                case ClientMessage:if(static_cast<Atom>(event.xclient.data.l[0])==delete_atom_)return 0;break;
+                default:break;}}
+            const std::uint64_t now=now_ns();const double dt=static_cast<double>(now-last_frame_ns_)/1000000000.0;last_frame_ns_=now;game_.frame(std::clamp(dt,0.0,0.05));
+            int rw=0,rh=0;if(game_.take_resize_request(rw,rh))XResizeWindow(display_,window_,static_cast<unsigned>(rw),static_cast<unsigned>(rh));
+            InfiltratrFixedStepResult result{};if(infiltratr_fixed_step_advance(&scheduler_,now,&result))for(std::uint64_t i=0;i<result.steps_to_run;++i)game_.tick();
+            if(game_.dirty()){game_.draw();present();game_.rendered();}std::this_thread::sleep_for(std::chrono::milliseconds(8));
         }
         return 0;
     }
 
 private:
-    Display* display_=nullptr;
-    int screen_=0;
-    Window window_=0;
-    GC gc_=0;
-    Atom delete_atom_=0;
-    XImage* image_=nullptr;
-    Framebuffer fb_;
-    Game game_;
-    InfiltratrFixedStepScheduler scheduler_{};
-    std::uint64_t last_frame_ns_=0;
-
-    static std::uint64_t now_ns(){
-        return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
-    }
-
-    static unsigned long pack(std::uint8_t value,unsigned long mask){
-        if(!mask)return 0;
-        unsigned shift=0;
-        while(((mask>>shift)&1UL)==0UL)++shift;
-        const unsigned long max=mask>>shift;
-        return((static_cast<unsigned long>(value)*max+127UL)/255UL<<shift)&mask;
-    }
-
-    void recreate(int w,int h){
-        if(image_){std::free(image_->data);image_->data=nullptr;XDestroyImage(image_);image_=nullptr;}
-        image_=XCreateImage(display_,DefaultVisual(display_,screen_),DefaultDepth(display_,screen_),ZPixmap,0,nullptr,w,h,32,0);
-        if(!image_)throw std::runtime_error("Unable to create XImage");
-        image_->data=static_cast<char*>(std::calloc(static_cast<std::size_t>(image_->bytes_per_line)*h,1));
-        if(!image_->data)throw std::bad_alloc();
-    }
-
-    void present(){
-        const auto& pixels=fb_.pixels();
-        const int w=fb_.width(),h=fb_.height();
-        for(int y=0;y<h;++y){
-            for(int x=0;x<w;++x){
-                const Color c=pixels[static_cast<std::size_t>(y*w+x)];
-                XPutPixel(image_,x,y,pack(c.r,image_->red_mask)|pack(c.g,image_->green_mask)|pack(c.b,image_->blue_mask));
-            }
-        }
-        XPutImage(display_,window_,gc_,image_,0,0,0,0,w,h);
-        XFlush(display_);
-    }
+    Display* display_=nullptr;int screen_=0;Window window_=0;GC gc_=0;Atom delete_atom_=0;XImage* image_=nullptr;Framebuffer fb_;Game game_;InfiltratrFixedStepScheduler scheduler_{};std::uint64_t last_frame_ns_=0;
+    static std::uint64_t now_ns(){return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());}
+    static unsigned long pack(std::uint8_t value,unsigned long mask){if(!mask)return 0;unsigned shift=0;while(((mask>>shift)&1UL)==0UL)++shift;const unsigned long max=mask>>shift;return((static_cast<unsigned long>(value)*max+127UL)/255UL<<shift)&mask;}
+    void recreate(int w,int h){if(image_){std::free(image_->data);image_->data=nullptr;XDestroyImage(image_);image_=nullptr;}image_=XCreateImage(display_,DefaultVisual(display_,screen_),DefaultDepth(display_,screen_),ZPixmap,0,nullptr,w,h,32,0);if(!image_)throw std::runtime_error("Unable to create XImage");image_->data=static_cast<char*>(std::calloc(static_cast<std::size_t>(image_->bytes_per_line)*h,1));if(!image_->data)throw std::bad_alloc();}
+    void present(){const auto& pixels=fb_.pixels();const int w=fb_.width(),h=fb_.height();for(int y=0;y<h;++y)for(int x=0;x<w;++x){const Color c=pixels[static_cast<std::size_t>(y*w+x)];XPutPixel(image_,x,y,pack(c.r,image_->red_mask)|pack(c.g,image_->green_mask)|pack(c.b,image_->blue_mask));}XPutImage(display_,window_,gc_,image_,0,0,0,0,w,h);XFlush(display_);}
 };
 
 } // namespace egypt
 
-int main(){
-    try{egypt::X11App app(1280,720);return app.run();}
-    catch(const std::exception& error){std::cerr<<"Egypt failed to start: "<<error.what()<<'\n';return 1;}
-}
+int main(){try{egypt::X11App app(1280,720);return app.run();}catch(const std::exception& error){std::cerr<<"Egypt failed to start: "<<error.what()<<'\n';return 1;}}
