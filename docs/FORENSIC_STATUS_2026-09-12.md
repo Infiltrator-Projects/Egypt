@@ -61,9 +61,11 @@ Consequences of this rule already established:
 - adding viable housing creates additional visible immigration traffic;
 - population increments only when immigrants arrive;
 - workers originate from real populated housing and commute to jobs;
-- specialist workers visibly change role/appearance;
+- workers change into role-readable work clothing when working;
 - hunters visibly leave the workplace, hunt, return with meat and contribute stock;
-- goods should be physically located and physically moved;
+- farms and workshops produce only while real resident labour is working there;
+- storage and market distribution requires real resident staff;
+- goods are physically located and physically moved;
 - houses visibly improve when requirements are sustained;
 - road use is recorded from actual traffic rather than a hidden arbitrary upgrade timer.
 
@@ -80,11 +82,11 @@ The exact names/capacities are original bootstrap values and may be rebalanced.
 
 Behaviour:
 
-- road access alone never creates population;
-- food eligibility creates housing demand;
-- the road network must connect to a valid map edge/kingdom route;
-- immigrants reserve target capacity while in transit;
-- water from a nearby well allows early housing evolution;
+- a house requires a road network connected to a valid map edge/kingdom route before immigrants can reach it;
+- an unsupplied but reachable new house can attract a small bootstrap population, currently capped at 4 residents, so the settlement can create its first labour force without a food/labour deadlock;
+- immigrants reserve target capacity while in transit and population is added only on arrival;
+- food then sustains the household and permits stronger immigration rather than magically creating the original workers;
+- water from a nearby well allows early housing evolution once residents and food are present;
 - pottery is the first manufactured household good used for later evolution;
 - upgraded housing creates extra capacity and therefore can trigger another immigration wave;
 - sustained loss of requirements can cause regression;
@@ -108,7 +110,7 @@ Current information includes:
 
 Later systems should add taxation, health, fire, collapse, crime and further household goods only when those simulations genuinely exist rather than showing fake placeholder status.
 
-Current evolution diagnostics include road, food, water, pottery and desirability/service blockers.
+Current evolution diagnostics include settlement arrival, road, food, water, pottery and desirability/service blockers.
 
 ## Roads
 
@@ -124,45 +126,58 @@ Actual immigrants, workers and logistics agents add traffic as they traverse roa
 
 Current chain:
 
-**farm/hunting lodge → physical food cart → granary → physical food cart → market → physical food cart → house**
+**staffed farm / staffed hunting lodge → physical food cart → staffed granary → physical food cart → staffed market → physical food cart → house**
 
 Food no longer transfers instantaneously between these stages. Dispatch removes stock from the source, creates a `GoodsAgent`, routes it over the actual road network, and deposits the load only when the agent arrives. Food in transit remains part of the city's total-food accounting and its movement contributes road traffic.
 
-Granaries, markets, farms, hunting lodges and houses all hold real local food stock. A broken road now physically breaks the delivery chain rather than leaving an invisible city-wide supply connection.
+Farms produce only while their resident farmer is at work. Granaries and markets have resident staff and distribution pauses when the relevant workplace is not active. Granaries, markets, farms, hunting lodges and houses all hold real local food stock. A broken road physically breaks the delivery chain rather than leaving an invisible city-wide supply connection.
 
-The next refinement is employment: farms, granaries and markets should ultimately need real residents/workers rather than operating solely because they have road access.
+The current staffing numbers and shift durations are bootstrap balance values, not final economy balance.
 
-## Employment and hunting
+## Employment and work cycles
 
-Current first visible employment slice:
+Labour now comes from actual households rather than a global magical workforce.
 
-**HOME → COMMUTING TO LODGE → HUNTER ROLE → HUNTING TRIP → RETURNING WITH MEAT → LODGE/STORAGE → HOME/REPEAT**
+Current generic work cycle:
 
-Workers belong to actual households and remain part of resident population. Road travel contributes traffic.
+**HOME → COMMUTING ON REAL ROADS → WORKPLACE → WORKING → COMMUTING HOME → REST → REPEAT**
 
-Future work should extend the same home/job relationship to farms, clay pits, potters, storage, markets and other workplaces instead of using a global magical labour pool.
+Current resident roles are:
+
+- Farmer;
+- Clay Worker;
+- Potter;
+- Granary Worker;
+- Market Worker;
+- Hunter.
+
+Farms, clay pits, potters, granaries, markets and hunting lodges therefore have explicit staffing requirements. Workers remain members of their home household while employed and their commute contributes road traffic. The inspector reports assigned staff, workplace capacity and how many staff are currently at work.
+
+Hunters retain a specialist extension of the generic cycle:
+
+**HOME → LODGE → HUNTER ROLE → FIELD TRIP → HUNTING → RETURN WITH MEAT → LODGE → HOME**
+
+Presentation changes worker clothing by role once the resident reaches work, preserving the reference behaviour in which a civilian visibly becomes a worker rather than a job happening invisibly inside a building.
 
 ## Clay and pottery — restored foundational milestone
 
 The original first end-to-end industrial proof was always:
 
-**clay pit → physical clay movement → potter → pottery → market/storage → physical household delivery → housing improvement**
+**staffed clay pit → physical clay movement → staffed potter → pottery → staffed market/storage → physical household delivery → housing improvement**
 
 The project had drifted away from this while food/hunting were being developed. The forensic pass restored it as an active simulation slice.
 
 Current implementation includes a generic `GoodsAgent` used by food, clay and pottery logistics:
 
-- clay pits produce finite clay stock;
+- staffed clay pits produce finite clay stock;
 - clay is removed from the source only when a physical goods agent is dispatched;
-- the goods agent travels the actual road network to a potter;
-- potters consume clay and create finite pottery stock;
-- pottery physically travels from potter to market;
+- the goods agent travels the actual road network to a staffed potter;
+- potters consume clay and create finite pottery stock only while their worker is at work;
+- pottery physically travels from potter to a staffed market;
 - pottery physically travels from market to a household;
 - household pottery stock is consumed over time;
 - pottery gates the first goods-dependent housing level;
 - all logistics carts contribute road traffic while travelling.
-
-The next refinement is to tie clay/pottery production to real commuting workers rather than production occurring merely because the building has road access.
 
 ## Desirability
 
@@ -205,15 +220,19 @@ Implemented and tested in the headless world model:
 
 - map terrain and Pharaoh-style isometric handedness;
 - physical road topology;
+- bootstrap immigration from the kingdom road before food exists, avoiding a labour/food deadlock;
 - physical farm/hunting → granary → market → house food logistics;
 - visible immigrant simulation state;
-- well service and housing evolution/capacity;
-- labour tied to real residents for hunting lodges;
+- real household labour assigned to farms, clay pits, potters, granaries, markets and hunting lodges;
+- explicit commute/work/home worker cycles;
+- production gated by active workers;
 - visible hunter state machine;
 - physical clay/pottery logistics agents;
 - household pottery stock and pottery-gated housing evolution;
+- well service and housing evolution/capacity;
 - persistent road traffic/evolution state;
 - house evolution diagnostics;
+- workplace staffing diagnostics;
 - bootstrap desirability;
 - simulation calendar;
 - Common 1.16.0 fixed-step integration at application level;
@@ -226,9 +245,10 @@ Implemented in presentation:
 - edge-scroll, drag-pan, wheel zoom, keyboard pan and recenter;
 - display settings bootstrap;
 - procedural housing/well/hunting/granary/market/farm/industry assets;
-- visible immigrants, hunters and food/clay/pottery carts;
+- visible immigrants, role-coloured workers and food/clay/pottery carts;
+- workers visibly change from civilian clothing into role-readable work clothing;
 - road appearance changes from measured traffic;
-- expanded residence/road/industry inspector;
+- expanded residence/road/workplace inspector with real staffing state;
 - month/year HUD plus pause/x1/x2/x4 controls;
 - whole-map minimap with click navigation and approximate viewport;
 - moving cloud shadows and animated water detail;
@@ -241,17 +261,17 @@ Implemented in presentation:
 3. Improve minimap viewport accuracy and add click-drag navigation.
 4. Add real birds/ibis, wildlife and richer ambient animation.
 5. Improve cloud-shadow shapes and lighting once the graphics pipeline is less primitive.
-6. Improve carts/people from coloured primitives into readable animated sprites/assets.
+6. Improve carts/people from coloured primitives into readable animated sprites/assets while preserving role readability.
 
 ## High-priority simulation gaps
 
-1. Tie farms, clay pits, potters, markets, granaries and future industry to actual labour/commuting.
+1. Scale labour demand and production throughput beyond the current one-worker bootstrap values, including explicit understaffing effects.
 2. Make 2x2 housing merge a genuine multi-tile residence identity rather than only a visual merge.
 3. Replace abstract hunting targets with real wildlife agents.
-4. Add causal supply tracing to the inspector: house ← market ← storage ← producer.
-5. Add reeds → papyrus as the second manufacturing chain.
-6. Begin Nile inundation/agricultural-cycle simulation after the basic logistics slice is physically coherent.
-7. Add storage/distribution policies so the player can intentionally route goods rather than relying only on automatic nearest viable chains.
+4. Add causal supply tracing to the inspector: house ← market ← storage ← producer and the responsible workers/carts.
+5. Add fair demand scheduling and player-controlled distribution policies as the city grows beyond the bootstrap district.
+6. Add reeds → papyrus as the second manufacturing chain.
+7. Begin Nile inundation/agricultural-cycle simulation after the basic logistics slice is physically coherent.
 
 ## Guardrail
 
