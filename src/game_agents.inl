@@ -52,6 +52,18 @@
         if(carrying) fb_.fill_rect({x+4,y-1,4,4},{180,55,42});
     }
 
+    Color role_color(WorkerRole role) const {
+        switch(role){
+            case WorkerRole::Hunter:return {79,101,49};
+            case WorkerRole::Farmer:return {74,126,65};
+            case WorkerRole::ClayWorker:return {163,91,56};
+            case WorkerRole::Potter:return {174,72,52};
+            case WorkerRole::GranaryWorker:return {77,106,137};
+            case WorkerRole::MarketWorker:return {143,79,126};
+        }
+        return {186,145,91};
+    }
+
     void draw_cart(const GoodsAgent& g) {
         const IsoPoint p=cam_.project(g.x,g.y);
         Color cargo{198,131,72};
@@ -61,6 +73,7 @@
         fb_.fill_rect({p.x-5,p.y-15,10,6},cargo);
         fb_.fill_rect({p.x-7,p.y-2,4,4},{45,38,32});
         fb_.fill_rect({p.x+4,p.y-2,4,4},{45,38,32});
+        draw_person({p.x-13,p.y+2},{169,132,83},{171,112,76},0,false);
     }
 
     void draw_agents() {
@@ -71,8 +84,8 @@
         }
         for(const auto& w:world_.workers()) {
             const IsoPoint p=cam_.project(w.x,w.y);
-            const bool hunter=w.state==WorkerState::HunterOutbound||w.state==WorkerState::Hunting||w.state==WorkerState::HunterReturning;
-            const Color clothes=hunter?Color{79,101,49}:Color{186,145,91};
+            const bool work_clothes=w.state!=WorkerState::CommutingToJob&&w.state!=WorkerState::RestingAtHome;
+            const Color clothes=work_clothes?role_color(w.role):Color{186,145,91};
             draw_person(p,clothes,{171,112,76},0,w.payload_food>0);
         }
     }
