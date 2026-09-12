@@ -23,9 +23,8 @@ struct Image {
     }
 };
 
-// Egypt-native E16A image format.
-// Header: "E16A", little-endian uint16 width, uint16 height.
-// Stream: 2-bit opcode + compact RGB565 payload/delta/run/index operations.
+// Egypt-native EJ8A menu-image decoder. The public name is retained for the
+// current renderer call site while the bootstrap code is being consolidated.
 Image load_e16(const std::string& path);
 
 } // namespace egypt::common
