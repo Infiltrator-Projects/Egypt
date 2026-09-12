@@ -36,16 +36,24 @@
                 static_cast<std::uint8_t>(std::lround(a.b+(b.b-a.b)*t))
             };
         };
+
+        // Render the map in the same orientation as the main isometric camera.
+        // X on the minimap is screen-horizontal (map Y - map X), and Y is
+        // screen-vertical (map X + map Y).  This makes the minimap movement
+        // intuitive: W/S are vertical and A/D are horizontal.
         for(int py=0;py<inner_h;++py){
-            const double fy=double(py)*(World::kHeight-1)/std::max(1,inner_h-1);
-            const int y0=std::clamp(static_cast<int>(std::floor(fy)),0,World::kHeight-1);
-            const int y1=std::min(World::kHeight-1,y0+1);
-            const double ty=fy-y0;
+            const double ny=double(py)/std::max(1,inner_h-1);
             for(int px=0;px<inner_w;++px){
-                const double fx=double(px)*(World::kWidth-1)/std::max(1,inner_w-1);
+                const double nx=double(px)/std::max(1,inner_w-1);
+                const auto map=minimap_to_map(nx,ny);
+                const double fx=map[0],fy=map[1];
+                if(fx<0.0||fy<0.0||fx>World::kWidth-1||fy>World::kHeight-1)continue;
+
                 const int x0=std::clamp(static_cast<int>(std::floor(fx)),0,World::kWidth-1);
+                const int y0=std::clamp(static_cast<int>(std::floor(fy)),0,World::kHeight-1);
                 const int x1=std::min(World::kWidth-1,x0+1);
-                const double tx=fx-x0;
+                const int y1=std::min(World::kHeight-1,y0+1);
+                const double tx=fx-x0,ty=fy-y0;
                 const Color c00=terrain_color(world_.tile(x0,y0).terrain,x0,y0);
                 const Color c10=terrain_color(world_.tile(x1,y0).terrain,x1,y0);
                 const Color c01=terrain_color(world_.tile(x0,y1).terrain,x0,y1);
@@ -60,19 +68,42 @@
             for(int x=0;x<World::kWidth;++x){
                 const Tile& t=world_.tile(x,y);
                 if(t.structure==Structure::Empty)continue;
-                const int px=inner_x+x*(inner_w-1)/std::max(1,World::kWidth-1);
-                const int py=inner_y+y*(inner_h-1)/std::max(1,World::kHeight-1);
+                const auto n=minimap_normalized(x,y);
+                const int px=inner_x+static_cast<int>(std::lround(n[0]*(inner_w-1)));
+                const int py=inner_y+static_cast<int>(std::lround(n[1]*(inner_h-1)));
                 const int size=t.structure==Structure::Road?2:3;
                 fb_.fill_rect({px-size/2,py-size/2,size,size},flat_structure_color(t.structure));
             }
         }
 
-        int cx=World::kWidth/2,cy=World::kHeight/2;
-        if(!cam_.pick(fb_.width()/2,fb_.height()/2,cx,cy)){cx=World::kWidth/2;cy=World::kHeight/2;}
-        const int rx=std::clamp(inner_w/5,18,70),ry=std::clamp(inner_h/4,14,50);
-        const int px=inner_x+std::clamp(cx,0,World::kWidth-1)*inner_w/World::kWidth-rx/2;
-        const int py=inner_y+std::clamp(cy,0,World::kHeight-1)*inner_h/World::kHeight-ry/2;
-        fb_.rect({px,py,rx,ry},{250,239,199},1);
+        // Project the actual visible camera rectangle rather than drawing a
+        // fixed-size marker around a raw map-X/map-Y centre.  The marker now
+        // moves in exactly the same cardinal directions as the main camera.
+        const std::array<std::array<int,2>,4> corners{{
+            {{0,78}},
+            {{fb_.width()-1,78}},
+            {{0,std::max(79,fb_.height()-105)}},
+            {{fb_.width()-1,std::max(79,fb_.height()-105)}}
+        }};
+        double min_nx=1e9,max_nx=-1e9,min_ny=1e9,max_ny=-1e9;
+        for(const auto& corner:corners){
+            int tx=0,ty=0;
+            if(!cam_.pick(corner[0],corner[1],tx,ty))continue;
+            const auto n=minimap_normalized(tx,ty);
+            min_nx=std::min(min_nx,n[0]);max_nx=std::max(max_nx,n[0]);
+            min_ny=std::min(min_ny,n[1]);max_ny=std::max(max_ny,n[1]);
+        }
+        if(min_nx<=max_nx&&min_ny<=max_ny){
+            int x0=inner_x+static_cast<int>(std::floor(min_nx*(inner_w-1)));
+            int x1=inner_x+static_cast<int>(std::ceil(max_nx*(inner_w-1)));
+            int y0=inner_y+static_cast<int>(std::floor(min_ny*(inner_h-1)));
+            int y1=inner_y+static_cast<int>(std::ceil(max_ny*(inner_h-1)));
+            x0=std::clamp(x0,inner_x,inner_x+inner_w-1);
+            x1=std::clamp(x1,inner_x,inner_x+inner_w-1);
+            y0=std::clamp(y0,inner_y,inner_y+inner_h-1);
+            y1=std::clamp(y1,inner_y,inner_y+inner_h-1);
+            if(x1>x0&&y1>y0)fb_.rect({x0,y0,x1-x0+1,y1-y0+1},{250,239,199},1);
+        }
     }
 
     void draw_menu() {
