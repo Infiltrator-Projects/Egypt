@@ -98,9 +98,8 @@
             for(int y=0;y<World::kHeight;++y){
                 const int x=sum-y;if(!world_.in_bounds(x,y))continue;
                 const IsoPoint p=cam_.project(x,y);if(p.x<-tw||p.x>fb_.width()+tw||p.y<70-th||p.y>fb_.height()+th)continue;
-                const Tile& tile=world_.tile(x,y);const Color ground=terrain_color(tile.terrain,x,y);fb_.diamond(p,tw,th,ground,ground);
-                if(tile.terrain==Terrain::Water&&((x+y+water_phase)&3)==0)fb_.line(p.x-tw/5,p.y-1,p.x+tw/5,p.y-1,{73,143,163});
-                if(tile.terrain==Terrain::Reeds)for(int k=-2;k<=2;++k)fb_.line(p.x+k*3,p.y,p.x+k*3+1,p.y-10,{38,83,43});
+                const Tile& tile=world_.tile(x,y);
+                draw_ground_tile(x,y,tile,p,tw,th,water_phase);
                 draw_structure_at(x,y,tile,p,tw,th);
             }
         }
