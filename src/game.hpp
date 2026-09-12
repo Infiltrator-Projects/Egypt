@@ -10,6 +10,7 @@ class Game {
 #include "game_terrain.inl"
 #include "game_agents.inl"
 #include "game_world_ui.inl"
+#include "game_hud.inl"
 #include "game_inspector.inl"
 };
 
