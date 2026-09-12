@@ -1,0 +1,139 @@
+name: Apply Wildlife Simulation Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-wildlife-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-wildlife:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install X11 development headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev
+
+      - name: Apply wildlife simulation patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected exactly one match, found {count}")
+              return text.replace(old, new, 1)
+
+          # ----- world.hpp -----
+          path = Path('src/world.hpp')
+          s = path.read_text()
+          s = replace_once(s,
+              'enum class Resource : std::uint8_t { Food, Clay, Pottery };\n',
+              '''enum class Resource : std::uint8_t { Food, Clay, Pottery };\n\nenum class WildlifeKind : std::uint8_t { Gazelle };\n\nstruct WildlifeAgent {\n    int id = 0;\n    int x = 0;\n    int y = 0;\n    WildlifeKind kind = WildlifeKind::Gazelle;\n};\n''',
+              'wildlife types')
+          s = replace_once(s,
+              '    std::uint8_t payload_food = 0;\n};\n\nstruct GoodsAgent',
+              '    std::uint8_t payload_food = 0;\n    int wildlife_target_id = -1;\n};\n\nstruct GoodsAgent',
+              'worker wildlife target')
+          s = replace_once(s,
+              '    [[nodiscard]] const std::vector<GoodsAgent>& goods_agents() const { return goods_agents_; }\n',
+              '    [[nodiscard]] const std::vector<GoodsAgent>& goods_agents() const { return goods_agents_; }\n    [[nodiscard]] const std::vector<WildlifeAgent>& wildlife() const { return wildlife_; }\n    [[nodiscard]] int wildlife_population() const { return static_cast<int>(wildlife_.size()); }\n    [[nodiscard]] std::uint64_t wildlife_harvests() const { return wildlife_harvests_; }\n',
+              'wildlife public access')
+          s = replace_once(s,
+              '    std::vector<GoodsAgent> goods_agents_;\n    int treasury_ = 5000;\n',
+              '    std::vector<GoodsAgent> goods_agents_;\n    std::vector<WildlifeAgent> wildlife_;\n    int next_wildlife_id_ = 1;\n    std::uint64_t wildlife_harvests_ = 0;\n    int treasury_ = 5000;\n',
+              'wildlife members')
+          s = replace_once(s,
+              '    [[nodiscard]] std::vector<std::size_t> hunting_path_from(int job_x, int job_y) const;\n',
+              '''    [[nodiscard]] int find_wildlife_target(int job_x, int job_y) const;\n    [[nodiscard]] std::vector<std::size_t> hunting_path_from(int job_x, int job_y, int wildlife_id) const;\n    [[nodiscard]] const WildlifeAgent* wildlife_by_id(int wildlife_id) const;\n    bool harvest_wildlife(int wildlife_id);\n''',
+              'wildlife hunting declarations')
+          s = replace_once(s,
+              '    void generate();\n    void produce_food();\n',
+              '    void generate();\n    void seed_wildlife();\n    void move_wildlife();\n    void produce_food();\n',
+              'wildlife tick declarations')
+          path.write_text(s)
+
+          # ----- world.cpp -----
+          path = Path('src/world.cpp')
+          s = path.read_text()
+          s = replace_once(s,
+              '    immigrants_.clear();\n    workers_.clear();\n    goods_agents_.clear();\n',
+              '    immigrants_.clear();\n    workers_.clear();\n    goods_agents_.clear();\n    wildlife_.clear();\n    next_wildlife_id_ = 1;\n    wildlife_harvests_ = 0;\n',
+              'clear wildlife')
+          s = replace_once(s,
+              '''            if (d <= -8 && d >= -13 && ((x * 17 + y * 13) % 31 < 4)) t.terrain = Terrain::Clay;\n        }\n    }\n}\n\nint World::cost''',
+              '''            if (d <= -8 && d >= -13 && ((x * 17 + y * 13) % 31 < 4)) t.terrain = Terrain::Clay;\n        }\n    }\n    seed_wildlife();\n}\n\nvoid World::seed_wildlife() {\n    wildlife_.clear();\n    for (int y = 4; y < kHeight - 2 && wildlife_.size() < 28U; y += 4) {\n        for (int x = 8; x < kWidth - 2 && wildlife_.size() < 28U; x += 6) {\n            const Tile& t = tile(x, y);\n            if (t.structure != Structure::Empty) continue;\n            if (t.terrain != Terrain::Desert && t.terrain != Terrain::Floodplain) continue;\n            WildlifeAgent animal;\n            animal.id = next_wildlife_id_++;\n            animal.x = x;\n            animal.y = y;\n            animal.kind = WildlifeKind::Gazelle;\n            wildlife_.push_back(animal);\n        }\n    }\n}\n\nconst WildlifeAgent* World::wildlife_by_id(int wildlife_id) const {\n    for (const auto& animal : wildlife_) if (animal.id == wildlife_id) return &animal;\n    return nullptr;\n}\n\nbool World::harvest_wildlife(int wildlife_id) {\n    for (std::size_t i = 0; i < wildlife_.size(); ++i) {\n        if (wildlife_[i].id != wildlife_id) continue;\n        wildlife_.erase(wildlife_.begin() + static_cast<std::ptrdiff_t>(i));\n        ++wildlife_harvests_;\n        return true;\n    }\n    return false;\n}\n\nvoid World::move_wildlife() {\n    if ((ticks_ % 8U) == 0U) {\n        static constexpr int dx[4] = {1, 0, -1, 0};\n        static constexpr int dy[4] = {0, 1, 0, -1};\n        for (auto& animal : wildlife_) {\n            bool reserved = false;\n            for (const auto& worker : workers_) {\n                if (worker.role == WorkerRole::Hunter && worker.wildlife_target_id == animal.id) { reserved = true; break; }\n            }\n            if (reserved) continue;\n            const int first = static_cast<int>((ticks_ / 8U + static_cast<std::uint64_t>(animal.id * 3)) % 4U);\n            for (int attempt = 0; attempt < 4; ++attempt) {\n                const int dir = (first + attempt) % 4;\n                const int nx = animal.x + dx[dir], ny = animal.y + dy[dir];\n                if (!in_bounds(nx, ny)) continue;\n                const Tile& t = tile(nx, ny);\n                if (t.terrain == Terrain::Water || t.terrain == Terrain::Reeds) continue;\n                if (t.structure != Structure::Empty) continue;\n                animal.x = nx;\n                animal.y = ny;\n                break;\n            }\n        }\n    }\n\n    if ((ticks_ % 96U) == 0U && wildlife_.size() < 20U) {\n        for (int attempt = 0; attempt < kWidth * kHeight; ++attempt) {\n            const int x = 3 + static_cast<int>((ticks_ + static_cast<std::uint64_t>(next_wildlife_id_ * 11 + attempt * 7)) % (kWidth - 6));\n            const int y = 3 + static_cast<int>(((ticks_ / 3U) + static_cast<std::uint64_t>(next_wildlife_id_ * 5 + attempt * 13)) % (kHeight - 6));\n            const Tile& t = tile(x, y);\n            if (t.structure != Structure::Empty) continue;\n            if (t.terrain != Terrain::Desert && t.terrain != Terrain::Floodplain) continue;\n            WildlifeAgent animal;\n            animal.id = next_wildlife_id_++;\n            animal.x = x;\n            animal.y = y;\n            animal.kind = WildlifeKind::Gazelle;\n            wildlife_.push_back(animal);\n            break;\n        }\n    }\n}\n\nint World::cost''',
+              'seed wildlife implementation')
+
+          old_hunt = '''std::vector<std::size_t> World::hunting_path_from(int job_x, int job_y) const {\n    static constexpr std::array<std::array<int, 2>, 8> dirs{{\n        {{-1,0}}, {{0,1}}, {{0,-1}}, {{1,0}}, {{-1,1}}, {{-1,-1}}, {{1,1}}, {{1,-1}}\n    }};\n    for (const auto& d : dirs) {\n        std::vector<std::size_t> path;\n        int x = job_x, y = job_y;\n        bool valid = true;\n        for (int step = 0; step < 4; ++step) {\n            x += d[0]; y += d[1];\n            if (!in_bounds(x, y) || tile(x, y).terrain == Terrain::Water) { valid = false; break; }\n            path.push_back(index(x, y));\n        }\n        if (valid) return path;\n    }\n    return {};\n}\n'''
+          new_hunt = '''int World::find_wildlife_target(int job_x, int job_y) const {\n    int best_id = -1;\n    std::size_t best_path = std::numeric_limits<std::size_t>::max();\n    for (const auto& animal : wildlife_) {\n        bool reserved = false;\n        for (const auto& worker : workers_) {\n            if (worker.role == WorkerRole::Hunter && worker.wildlife_target_id == animal.id) { reserved = true; break; }\n        }\n        if (reserved) continue;\n        if (std::abs(animal.x - job_x) + std::abs(animal.y - job_y) > 20) continue;\n        const auto path = hunting_path_from(job_x, job_y, animal.id);\n        if (!path.empty() && path.size() < best_path) {\n            best_path = path.size();\n            best_id = animal.id;\n        }\n    }\n    return best_id;\n}\n\nstd::vector<std::size_t> World::hunting_path_from(int job_x, int job_y, int wildlife_id) const {\n    const WildlifeAgent* target = wildlife_by_id(wildlife_id);\n    if (!target || !in_bounds(job_x, job_y)) return {};\n    const std::size_t start = index(job_x, job_y);\n    const std::size_t goal = index(target->x, target->y);\n    if (start == goal) return {};\n\n    std::vector<std::uint8_t> seen(tiles_.size(), 0);\n    std::vector<int> previous(tiles_.size(), -1);\n    std::queue<std::size_t> q;\n    q.push(start);\n    seen[start] = 1;\n    static constexpr int dx[4] = {1, -1, 0, 0};\n    static constexpr int dy[4] = {0, 0, 1, -1};\n\n    while (!q.empty() && !seen[goal]) {\n        const auto current = q.front(); q.pop();\n        const int x = static_cast<int>(current % kWidth), y = static_cast<int>(current / kWidth);\n        for (int i = 0; i < 4; ++i) {\n            const int nx = x + dx[i], ny = y + dy[i];\n            if (!in_bounds(nx, ny)) continue;\n            const auto ni = index(nx, ny);\n            if (seen[ni]) continue;\n            const Tile& t = tile(nx, ny);\n            if (t.terrain == Terrain::Water) continue;\n            if (ni != goal && t.structure != Structure::Empty && t.structure != Structure::Road) continue;\n            seen[ni] = 1;\n            previous[ni] = static_cast<int>(current);\n            q.push(ni);\n        }\n    }\n    if (!seen[goal]) return {};\n\n    std::vector<std::size_t> reverse;\n    for (std::size_t cur = goal; cur != start;) {\n        reverse.push_back(cur);\n        const int p = previous[cur];\n        if (p < 0) return {};\n        cur = static_cast<std::size_t>(p);\n    }\n    std::reverse(reverse.begin(), reverse.end());\n    return reverse;\n}\n'''
+          s = replace_once(s, old_hunt, new_hunt, 'replace abstract hunting path')
+
+          s = replace_once(s,
+              '''                        if (w.role == WorkerRole::Hunter) {\n                            w.path = hunting_path_from(w.job_x, w.job_y); w.path_position = 0;\n                            if (w.path.empty()) { w.work_ticks = 2; w.state = WorkerState::Hunting; }\n                            else w.state = WorkerState::HunterOutbound;\n                        } else {''',
+              '''                        if (w.role == WorkerRole::Hunter) {\n                            w.wildlife_target_id = find_wildlife_target(w.job_x, w.job_y);\n                            w.path = hunting_path_from(w.job_x, w.job_y, w.wildlife_target_id);\n                            w.path_position = 0;\n                            if (w.wildlife_target_id < 0 || w.path.empty()) {\n                                w.wildlife_target_id = -1;\n                                w.work_ticks = 4;\n                                w.state = WorkerState::WorkingAtJob;\n                            } else w.state = WorkerState::HunterOutbound;\n                        } else {''',
+              'hunter selects wildlife')
+
+          s = replace_once(s,
+              '''                case WorkerState::Hunting:\n                    if (w.work_ticks > 0) --w.work_ticks;\n                    if (w.work_ticks == 0) { w.payload_food = 5; w.state = WorkerState::HunterReturning; }\n                    break;''',
+              '''                case WorkerState::Hunting:\n                    if (w.work_ticks > 0) --w.work_ticks;\n                    if (w.work_ticks == 0) {\n                        w.payload_food = harvest_wildlife(w.wildlife_target_id) ? 5 : 0;\n                        w.wildlife_target_id = -1;\n                        w.state = WorkerState::HunterReturning;\n                    }\n                    break;''',
+              'hunter harvests actual wildlife')
+
+          s = replace_once(s,
+              '''void World::tick() {\n    ++ticks_;\n    move_workers();''',
+              '''void World::tick() {\n    ++ticks_;\n    move_wildlife();\n    move_workers();''',
+              'wildlife tick')
+          path.write_text(s)
+
+          # ----- presentation -----
+          path = Path('src/game_agents.inl')
+          s = path.read_text()
+          s = replace_once(s,
+              '''    void draw_agents() {\n        for(const auto& g:world_.goods_agents())draw_cart(g);''',
+              '''    void draw_wildlife(const WildlifeAgent& animal) {\n        const IsoPoint p=cam_.project(animal.x,animal.y);\n        if(animal.kind==WildlifeKind::Gazelle){\n            fb_.fill_rect({p.x-6,p.y-9,11,5},{165,125,78});\n            fb_.fill_rect({p.x+4,p.y-12,5,4},{181,143,93});\n            fb_.line(p.x-4,p.y-4,p.x-5,p.y+2,{74,58,42});\n            fb_.line(p.x+2,p.y-4,p.x+3,p.y+2,{74,58,42});\n            fb_.line(p.x+6,p.y-12,p.x+5,p.y-16,{79,61,42});\n            fb_.line(p.x+8,p.y-12,p.x+9,p.y-16,{79,61,42});\n        }\n    }\n\n    void draw_agents() {\n        for(const auto& animal:world_.wildlife())draw_wildlife(animal);\n        for(const auto& g:world_.goods_agents())draw_cart(g);''',
+              'render wildlife')
+          path.write_text(s)
+
+          # ----- smoke test -----
+          path = Path('tests/world_smoke.cpp')
+          s = path.read_text()
+          s = replace_once(s,
+              '''    if (world.total_pottery() != 0) fail("initial pottery stock must be zero");\n    if (world.month_index() != 0 || world.year_bc() != 3500) fail("initial date incorrect");''',
+              '''    if (world.total_pottery() != 0) fail("initial pottery stock must be zero");\n    if (world.wildlife_population() < 10) fail("initial wildlife population missing");\n    if (world.month_index() != 0 || world.year_bc() != 3500) fail("initial date incorrect");''',
+              'initial wildlife test')
+
+          s = replace_once(s,
+              '''    if (!world.place(Structure::HuntingLodge, 28, 12)) fail("hunting lodge placement failed");\n    bool saw_hunter = false;\n    bool saw_hunter_role_state = false;\n    bool saw_hunting_food = false;\n    for (int i = 0; i < 180; ++i) {\n        world.tick();\n        for (const auto& worker : world.workers()) {\n            if (worker.role == WorkerRole::Hunter) saw_hunter = true;\n            if (worker.role == WorkerRole::Hunter &&\n                (worker.state == WorkerState::HunterOutbound || worker.state == WorkerState::Hunting ||\n                 worker.state == WorkerState::HunterReturning)) saw_hunter_role_state = true;\n        }\n        if (world.tile(28, 12).food_stock > 0) saw_hunting_food = true;\n    }\n    if (!saw_hunter) fail("hunting lodge recruited no resident worker");\n    if (!saw_hunter_role_state) fail("hunter never entered specialist field work");\n    if (!saw_hunting_food && world.total_food() == 0) fail("hunting produced no food");''',
+              '''    if (!world.place(Structure::HuntingLodge, 28, 12)) fail("hunting lodge placement failed");\n    const std::uint64_t harvests_before = world.wildlife_harvests();\n    bool saw_hunter = false;\n    bool saw_hunter_role_state = false;\n    bool saw_hunter_target = false;\n    bool saw_hunting_food = false;\n    for (int i = 0; i < 220; ++i) {\n        world.tick();\n        for (const auto& worker : world.workers()) {\n            if (worker.role == WorkerRole::Hunter) saw_hunter = true;\n            if (worker.role == WorkerRole::Hunter && worker.wildlife_target_id >= 0) saw_hunter_target = true;\n            if (worker.role == WorkerRole::Hunter &&\n                (worker.state == WorkerState::HunterOutbound || worker.state == WorkerState::Hunting ||\n                 worker.state == WorkerState::HunterReturning)) saw_hunter_role_state = true;\n        }\n        if (world.tile(28, 12).food_stock > 0) saw_hunting_food = true;\n    }\n    if (!saw_hunter) fail("hunting lodge recruited no resident worker");\n    if (!saw_hunter_target) fail("hunter never selected an actual wildlife target");\n    if (!saw_hunter_role_state) fail("hunter never entered specialist field work");\n    if (world.wildlife_harvests() <= harvests_before) fail("hunter never harvested an actual animal");\n    if (!saw_hunting_food && world.total_food() == 0) fail("wildlife hunting produced no food");''',
+              'wildlife hunting test')
+          path.write_text(s)
+          PY
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Commit tested wildlife implementation
+        run: |
+          git config user.name "Shannon Smith"
+          git config user.email "infiltratr@yandex.com"
+          git add src/world.hpp src/world.cpp src/game_agents.inl tests/world_smoke.cpp
+          git diff --cached --check
+          git commit -m "Add visible wildlife hunting simulation"
+          git push origin HEAD:main
