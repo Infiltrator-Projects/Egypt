@@ -22,6 +22,15 @@ enum class Structure : std::uint8_t {
 
 enum class Resource : std::uint8_t { Food, Clay, Pottery };
 
+enum class WildlifeKind : std::uint8_t { Gazelle };
+
+struct WildlifeAgent {
+    int id = 0;
+    int x = 0;
+    int y = 0;
+    WildlifeKind kind = WildlifeKind::Gazelle;
+};
+
 enum class WorkerRole : std::uint8_t {
     Hunter,
     Farmer,
@@ -85,6 +94,7 @@ struct WorkerAgent {
     std::size_t path_position = 0;
     std::uint8_t work_ticks = 0;
     std::uint8_t payload_food = 0;
+    int wildlife_target_id = -1;
 };
 
 struct GoodsAgent {
@@ -147,6 +157,9 @@ public:
     [[nodiscard]] const std::vector<ImmigrantAgent>& immigrants() const { return immigrants_; }
     [[nodiscard]] const std::vector<WorkerAgent>& workers() const { return workers_; }
     [[nodiscard]] const std::vector<GoodsAgent>& goods_agents() const { return goods_agents_; }
+    [[nodiscard]] const std::vector<WildlifeAgent>& wildlife() const { return wildlife_; }
+    [[nodiscard]] int wildlife_population() const { return static_cast<int>(wildlife_.size()); }
+    [[nodiscard]] std::uint64_t wildlife_harvests() const { return wildlife_harvests_; }
     [[nodiscard]] int treasury() const { return treasury_; }
     [[nodiscard]] std::uint64_t simulation_ticks() const { return ticks_; }
     [[nodiscard]] int month_index() const;
@@ -167,6 +180,9 @@ private:
     std::vector<ImmigrantAgent> immigrants_;
     std::vector<WorkerAgent> workers_;
     std::vector<GoodsAgent> goods_agents_;
+    std::vector<WildlifeAgent> wildlife_;
+    int next_wildlife_id_ = 1;
+    std::uint64_t wildlife_harvests_ = 0;
     int treasury_ = 5000;
     std::uint64_t ticks_ = 0;
 
@@ -189,10 +205,15 @@ private:
     [[nodiscard]] int desired_workers_for(Structure structure) const;
     [[nodiscard]] WorkerRole role_for(Structure structure) const;
     [[nodiscard]] bool is_workplace(Structure structure) const;
-    [[nodiscard]] std::vector<std::size_t> hunting_path_from(int job_x, int job_y) const;
+    [[nodiscard]] int find_wildlife_target(int job_x, int job_y) const;
+    [[nodiscard]] std::vector<std::size_t> hunting_path_from(int job_x, int job_y, int wildlife_id) const;
+    [[nodiscard]] const WildlifeAgent* wildlife_by_id(int wildlife_id) const;
+    bool harvest_wildlife(int wildlife_id);
     [[nodiscard]] int pending_goods_for(int target_x, int target_y, Resource resource) const;
 
     void generate();
+    void seed_wildlife();
+    void move_wildlife();
     void produce_food();
     void produce_clay();
     void produce_pottery();

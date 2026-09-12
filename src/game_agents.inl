@@ -76,7 +76,20 @@
         draw_person({p.x-13,p.y+2},{169,132,83},{171,112,76},0,false);
     }
 
+    void draw_wildlife(const WildlifeAgent& animal) {
+        const IsoPoint p=cam_.project(animal.x,animal.y);
+        if(animal.kind==WildlifeKind::Gazelle){
+            fb_.fill_rect({p.x-6,p.y-9,11,5},{165,125,78});
+            fb_.fill_rect({p.x+4,p.y-12,5,4},{181,143,93});
+            fb_.line(p.x-4,p.y-4,p.x-5,p.y+2,{74,58,42});
+            fb_.line(p.x+2,p.y-4,p.x+3,p.y+2,{74,58,42});
+            fb_.line(p.x+6,p.y-12,p.x+5,p.y-16,{79,61,42});
+            fb_.line(p.x+8,p.y-12,p.x+9,p.y-16,{79,61,42});
+        }
+    }
+
     void draw_agents() {
+        for(const auto& animal:world_.wildlife())draw_wildlife(animal);
         for(const auto& g:world_.goods_agents())draw_cart(g);
         for(const auto& a:world_.immigrants()) {
             const IsoPoint p=cam_.project(a.x,a.y);

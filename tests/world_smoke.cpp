@@ -19,6 +19,7 @@ int main() {
     if (world.total_food() != 0) fail("initial food stock must be zero");
     if (world.total_clay() != 0) fail("initial clay stock must be zero");
     if (world.total_pottery() != 0) fail("initial pottery stock must be zero");
+    if (world.wildlife_population() < 10) fail("initial wildlife population missing");
     if (world.month_index() != 0 || world.year_bc() != 3500) fail("initial date incorrect");
 
     if (!world.place(Structure::Road, 20, 10)) fail("isolated road placement failed");
@@ -130,13 +131,16 @@ int main() {
     if (!house_reached_goods_level) fail("pottery did not unlock the goods housing level");
 
     if (!world.place(Structure::HuntingLodge, 28, 12)) fail("hunting lodge placement failed");
+    const std::uint64_t harvests_before = world.wildlife_harvests();
     bool saw_hunter = false;
     bool saw_hunter_role_state = false;
+    bool saw_hunter_target = false;
     bool saw_hunting_food = false;
-    for (int i = 0; i < 180; ++i) {
+    for (int i = 0; i < 220; ++i) {
         world.tick();
         for (const auto& worker : world.workers()) {
             if (worker.role == WorkerRole::Hunter) saw_hunter = true;
+            if (worker.role == WorkerRole::Hunter && worker.wildlife_target_id >= 0) saw_hunter_target = true;
             if (worker.role == WorkerRole::Hunter &&
                 (worker.state == WorkerState::HunterOutbound || worker.state == WorkerState::Hunting ||
                  worker.state == WorkerState::HunterReturning)) saw_hunter_role_state = true;
@@ -144,8 +148,10 @@ int main() {
         if (world.tile(28, 12).food_stock > 0) saw_hunting_food = true;
     }
     if (!saw_hunter) fail("hunting lodge recruited no resident worker");
+    if (!saw_hunter_target) fail("hunter never selected an actual wildlife target");
     if (!saw_hunter_role_state) fail("hunter never entered specialist field work");
-    if (!saw_hunting_food && world.total_food() == 0) fail("hunting produced no food");
+    if (world.wildlife_harvests() <= harvests_before) fail("hunter never harvested an actual animal");
+    if (!saw_hunting_food && world.total_food() == 0) fail("wildlife hunting produced no food");
 
     bool saw_used_road = false;
     for (int y = 0; y < World::kHeight; ++y) {
