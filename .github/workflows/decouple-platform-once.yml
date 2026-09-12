@@ -1,0 +1,38 @@
+name: Decouple platform once
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'Finish platform boundary decoupling'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Remove X11 from game core
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/ui_core.hpp')
+          s = p.read_text()
+          old = '#include <X11/Xlib.h>\n#include <X11/Xutil.h>\n#include <X11/keysym.h>\n#include <infiltratr/timing.h>\n\n'
+          new = '#include "input.hpp"\n\n'
+          if old not in s:
+              raise SystemExit('expected X11 include block not found in ui_core.hpp')
+          p.write_text(s.replace(old, new, 1))
+          PY
+          rm -f src/egypt.cpp
+          rm -f .github/workflows/decouple-platform-once.yml
+      - name: Commit final boundary
+        run: |
+          git config user.name "Egypt CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "Finish platform boundary decoupling"
+          git push origin HEAD:main
