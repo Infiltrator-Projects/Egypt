@@ -37,6 +37,7 @@ struct Tile {
     std::uint8_t housing_level = 0;
     std::uint8_t housing_service_ticks = 0;
     std::uint16_t food_stock = 0;
+    std::uint16_t road_traffic = 0;
 };
 
 struct ImmigrantAgent {
@@ -84,6 +85,8 @@ public:
     [[nodiscard]] bool road_connected(int ax, int ay, int bx, int by) const;
     [[nodiscard]] bool has_well_service(int x, int y) const;
     [[nodiscard]] int house_capacity(int x, int y) const;
+    [[nodiscard]] int road_level(int x, int y) const;
+    [[nodiscard]] const char* house_evolution_status(int x, int y) const;
     [[nodiscard]] int population() const;
     [[nodiscard]] int employed_population() const;
     [[nodiscard]] int total_food() const;
@@ -97,6 +100,8 @@ public:
     [[nodiscard]] static const char* terrain_name(Terrain terrain);
     [[nodiscard]] static const char* structure_name(Structure structure);
     [[nodiscard]] static const char* worker_state_name(WorkerState state);
+    [[nodiscard]] static const char* housing_name(std::uint8_t level);
+    [[nodiscard]] static const char* road_level_name(int level);
 
 private:
     std::vector<Tile> tiles_;
@@ -125,6 +130,7 @@ private:
     void recruit_workers();
     void move_workers();
     void release_worker(const WorkerAgent& worker);
+    void record_road_traffic(int x, int y, int amount = 1);
 };
 
 } // namespace egypt
