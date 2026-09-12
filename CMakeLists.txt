@@ -30,6 +30,7 @@ if(EGYPT_HOST_BACKEND STREQUAL "x11")
         src/platform/x11_backend.cpp
         src/world.cpp
         src/common/image.cpp
+        src/common/raw_image.cpp
     )
     target_include_directories(egypt PRIVATE src)
     target_compile_features(egypt PRIVATE cxx_std_20)
