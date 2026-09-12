@@ -314,7 +314,7 @@ const char* World::house_evolution_status(int x, int y) const {
     const Tile& h = tile(x, y);
     if (!has_road_access(x, y)) return "NEEDS ROAD ACCESS";
     if (h.population == 0) return "WAITING FOR SETTLERS";
-    if (h.food_stock == 0) return "NEEDS A RELIABLE FOOD SUPPLY";
+    if (h.food_stock == 0 && pending_goods_for(x, y, Resource::Food) == 0) return "NEEDS A RELIABLE FOOD SUPPLY";
     if (!has_well_service(x, y)) return "NEEDS WATER FROM A NEARBY WELL";
     if (h.housing_level == 0 && h.housing_service_ticks < 4) return "FOOD AND WATER ARE STABILISING";
     if (h.housing_level == 1 && h.housing_service_ticks < 12) return "SUSTAIN FOOD AND WATER TO EVOLVE";
@@ -470,7 +470,8 @@ void World::update_housing() {
     for (int y = 0; y < kHeight; ++y) for (int x = 0; x < kWidth; ++x) {
         Tile& house = tile(x, y);
         if (house.structure != Structure::House) continue;
-        const bool supported = house.population > 0 && has_road_access(x, y) && house.food_stock > 0 && has_well_service(x, y);
+        const bool food_service = house.food_stock > 0 || pending_goods_for(x, y, Resource::Food) > 0;
+        const bool supported = house.population > 0 && has_road_access(x, y) && food_service && has_well_service(x, y);
         if (supported) {
             if (house.housing_service_ticks < 24) ++house.housing_service_ticks;
             if (house.housing_level == 0 && house.housing_service_ticks >= 4) house.housing_level = 1;
@@ -480,8 +481,8 @@ void World::update_housing() {
                 if (house.housing_level == 2 && house.housing_goods_ticks >= 6) house.housing_level = 3;
             } else if (house.housing_goods_ticks > 0) --house.housing_goods_ticks;
         } else {
-            if (house.housing_service_ticks > 0) --house.housing_service_ticks;
-            if (house.housing_goods_ticks > 0) --house.housing_goods_ticks;
+            if ((ticks_ % 4U) == 0U && house.housing_service_ticks > 0) --house.housing_service_ticks;
+            if ((ticks_ % 4U) == 0U && house.housing_goods_ticks > 0) --house.housing_goods_ticks;
             if ((ticks_ % 8U) == 0U && house.housing_service_ticks == 0 && house.housing_level > 0) --house.housing_level;
         }
         if (house.housing_level >= 3 && house.pottery_stock == 0 && house.housing_goods_ticks == 0 && (ticks_ % 16U) == 0U) {
