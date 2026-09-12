@@ -44,7 +44,7 @@ Established requirements:
 - selectable display/window sizes;
 - whole-map minimap in the lower-left;
 - minimap shows the current camera viewport;
-- minimap should eventually support click/drag repositioning;
+- minimap supports click repositioning; drag navigation remains a refinement;
 - pause and multiple simulation-speed controls;
 - month/year visible in the primary HUD;
 - population and treasury visible in the primary HUD.
@@ -92,21 +92,21 @@ Behaviour:
 
 ## House inspection
 
-Clicking a house should eventually open a substantial diagnostic panel rather than a tiny debug readout.
+Clicking a house now opens a substantially richer diagnostic panel than the original bootstrap inspector.
 
-The panel grows only as real systems exist and should expose:
+Current information includes:
 
 - housing type/level;
 - occupants / capacity / spare capacity;
 - employed/free residents;
 - food stock;
-- pottery and future household goods;
+- pottery stock;
 - water service;
 - road access;
 - desirability;
-- taxation when implemented;
-- health/fire/collapse/crime only when those simulations genuinely exist;
 - plain-language next-evolution blocker.
+
+Later systems should add taxation, health, fire, collapse, crime and further household goods only when those simulations genuinely exist rather than showing fake placeholder status.
 
 Current evolution diagnostics include road, food, water, pottery and desirability/service blockers.
 
@@ -118,17 +118,19 @@ Current bootstrap progression:
 
 **New Track → Worn Road → Established Road**
 
-Actual immigrants, workers and logistics agents add traffic as they traverse road tiles. Traffic state is persistent simulation data. Rendering should visibly reflect the three states; future systems may use traffic for travel speed, congestion or maintenance.
+Actual immigrants, workers and logistics agents add traffic as they traverse road tiles. Traffic state is persistent simulation data and now changes the rendered appearance of the route. Future systems may use traffic for travel speed, congestion or maintenance.
 
 ## Food and storage
 
 Current chain:
 
-**farm/hunting lodge → granary → market → house**
+**farm/hunting lodge → physical food cart → granary → physical food cart → market → physical food cart → house**
 
-Current food movement between these stages is still partly logical/instant and is therefore an explicit unfinished item. The intended final rule is visible producer/storage/market transport with physical carts/workers.
+Food no longer transfers instantaneously between these stages. Dispatch removes stock from the source, creates a `GoodsAgent`, routes it over the actual road network, and deposits the load only when the agent arrives. Food in transit remains part of the city's total-food accounting and its movement contributes road traffic.
 
-Granaries and markets have real stock. Production without storage/distribution should eventually back up visibly instead of teleporting/discarding resources.
+Granaries, markets, farms, hunting lodges and houses all hold real local food stock. A broken road now physically breaks the delivery chain rather than leaving an invisible city-wide supply connection.
+
+The next refinement is employment: farms, granaries and markets should ultimately need real residents/workers rather than operating solely because they have road access.
 
 ## Employment and hunting
 
@@ -146,9 +148,9 @@ The original first end-to-end industrial proof was always:
 
 **clay pit → physical clay movement → potter → pottery → market/storage → physical household delivery → housing improvement**
 
-The project had drifted away from this while food/hunting were being developed. The forensic pass restores it as an active simulation slice.
+The project had drifted away from this while food/hunting were being developed. The forensic pass restored it as an active simulation slice.
 
-Current implementation now includes a generic `GoodsAgent` for this chain:
+Current implementation includes a generic `GoodsAgent` used by food, clay and pottery logistics:
 
 - clay pits produce finite clay stock;
 - clay is removed from the source only when a physical goods agent is dispatched;
@@ -158,31 +160,44 @@ Current implementation now includes a generic `GoodsAgent` for this chain:
 - pottery physically travels from market to a household;
 - household pottery stock is consumed over time;
 - pottery gates the first goods-dependent housing level;
-- goods carts contribute road traffic while travelling.
+- all logistics carts contribute road traffic while travelling.
 
 The next refinement is to tie clay/pottery production to real commuting workers rather than production occurring merely because the building has road access.
 
 ## Desirability
 
-A first bootstrap desirability score now exists so housing diagnostics can begin distinguishing pleasant and industrial neighbourhoods.
+A first bootstrap desirability score exists so housing diagnostics can distinguish pleasant and industrial neighbourhoods.
 
 Current influences are intentionally simple/original and are not a copy of Pharaoh values. Water/reeds, wells and markets can help; clay pits, potters, hunting lodges and granaries can reduce nearby desirability. This is a foundation for later overlays and housing requirements, not final balancing.
 
-## Calendar
+## Calendar and simulation speed
 
-Simulation time now has an authoritative month/year derived from world ticks, beginning at 3500 BC for the bootstrap scenario. It is simulation state rather than decorative UI text.
+Simulation time has an authoritative month/year derived from world ticks, beginning at 3500 BC for the bootstrap scenario. It is simulation state rather than decorative UI text.
 
-The exact historically correct campaign calendar and scenario dates remain a later content/balance decision.
+The live HUD now exposes the date plus pause, x1, x2 and x4 controls. Space also toggles pause. The exact historically correct campaign calendar and scenario dates remain a later content/balance decision.
 
 ## Atmosphere
 
-Recovered visual requirements:
+Current presentation now includes:
 
-- cloud shadows move across terrain/buildings;
-- water surface has visible motion;
-- birds/wildlife move independently of economic actors;
-- vegetation contributes to a living landscape;
-- ambient effects remain lightweight and are not confused with gameplay systems unless explicitly promoted into simulation later.
+- moving cloud-shadow overlays crossing terrain/buildings;
+- animated Nile surface detail;
+- the existing visible immigrants, workers and carts.
+
+Still required:
+
+- actual wildlife agents rather than only the hunter abstraction;
+- birds/ibis and other ambient creatures;
+- richer vegetation and water animation;
+- more natural cloud shapes/lighting after the renderer/art pipeline improves.
+
+Ambient effects should remain lightweight and should not become authoritative gameplay state unless explicitly promoted into simulation later.
+
+## Flat/diagnostic view and minimap
+
+The Pharaoh reference showed that the flat footprint-style view is genuinely useful, not merely debug junk. Egypt now preserves this concept as a toggleable diagnostic mode (`F`).
+
+The lower-left minimap now represents the whole simulation map and an approximate current camera viewport. Clicking the minimap recentres the main camera. Drag navigation and better viewport geometry remain refinements.
 
 ## Current implementation checkpoint
 
@@ -190,7 +205,7 @@ Implemented and tested in the headless world model:
 
 - map terrain and Pharaoh-style isometric handedness;
 - physical road topology;
-- food production/storage/distribution bootstrap;
+- physical farm/hunting → granary → market → house food logistics;
 - visible immigrant simulation state;
 - well service and housing evolution/capacity;
 - labour tied to real residents for hunting lodges;
@@ -204,36 +219,39 @@ Implemented and tested in the headless world model:
 - Common 1.16.0 fixed-step integration at application level;
 - Linux CI building and running the world smoke test.
 
-Implemented in presentation already:
+Implemented in presentation:
 
 - 2.5D isometric projection/picking;
 - correct map handedness;
 - edge-scroll, drag-pan, wheel zoom, keyboard pan and recenter;
 - display settings bootstrap;
-- procedural housing/well/hunting/granary/market/farm assets;
-- visible immigrants and hunters;
-- simple selected-tile inspector.
+- procedural housing/well/hunting/granary/market/farm/industry assets;
+- visible immigrants, hunters and food/clay/pottery carts;
+- road appearance changes from measured traffic;
+- expanded residence/road/industry inspector;
+- month/year HUD plus pause/x1/x2/x4 controls;
+- whole-map minimap with click navigation and approximate viewport;
+- moving cloud shadows and animated water detail;
+- flat/diagnostic footprint mode.
 
-High-priority presentation gaps:
+## High-priority presentation gaps
 
-1. Draw road states differently from accumulated traffic.
-2. Draw `GoodsAgent` carts/porters and carried clay/pottery.
-3. Replace tiny house inspector with a real residence diagnostic window.
-4. Show calendar in the HUD and add pause/multiple simulation speeds.
-5. Add whole-map minimap with camera viewport and navigation.
-6. Add cloud-shadow atmosphere and richer water/wildlife animation.
-7. Add a flat/diagnostic footprint mode.
-8. Replace procedural programmer art with production-quality original assets.
+1. Replace procedural programmer art with production-quality original assets and animation.
+2. Improve the house panel from a large diagnostic overlay into a polished game window with clearer iconography/grouping.
+3. Improve minimap viewport accuracy and add click-drag navigation.
+4. Add real birds/ibis, wildlife and richer ambient animation.
+5. Improve cloud-shadow shapes and lighting once the graphics pipeline is less primitive.
+6. Improve carts/people from coloured primitives into readable animated sprites/assets.
 
-High-priority simulation gaps:
+## High-priority simulation gaps
 
-1. Convert food transfers to physical logistics agents.
-2. Tie farms, clay pits, potters, markets, granaries and future industry to actual labour/commuting.
-3. Make 2x2 housing merge a genuine multi-tile residence identity rather than only a visual merge.
-4. Replace abstract hunting target with real wildlife agents.
-5. Add pottery/storage causal tracing to the inspector.
-6. Add reeds → papyrus as the second manufacturing chain.
-7. Begin Nile inundation/agricultural-cycle simulation after the basic logistics slice is physically coherent.
+1. Tie farms, clay pits, potters, markets, granaries and future industry to actual labour/commuting.
+2. Make 2x2 housing merge a genuine multi-tile residence identity rather than only a visual merge.
+3. Replace abstract hunting targets with real wildlife agents.
+4. Add causal supply tracing to the inspector: house ← market ← storage ← producer.
+5. Add reeds → papyrus as the second manufacturing chain.
+6. Begin Nile inundation/agricultural-cycle simulation after the basic logistics slice is physically coherent.
+7. Add storage/distribution policies so the player can intentionally route goods rather than relying only on automatic nearest viable chains.
 
 ## Guardrail
 
