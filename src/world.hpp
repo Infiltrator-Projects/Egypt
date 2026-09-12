@@ -114,8 +114,23 @@ class World {
 public:
     static constexpr int kWidth = 64;
     static constexpr int kHeight = 36;
+    static constexpr int kKingdomRoadX = 18;
 
     World();
+
+    // Mission maps begin with a real through-road supplied by the kingdom.
+    // It is ordinary road simulation data (not decorative paint), costs the
+    // player nothing, reaches both map edges, and gives incoming settlers a
+    // physical route that player-built streets can join.
+    void lay_initial_kingdom_road() {
+        for (int y = 0; y < kHeight; ++y) {
+            Tile& road = tile(kKingdomRoadX, y);
+            if (road.structure != Structure::Empty && road.structure != Structure::Road) continue;
+            if (road.terrain == Terrain::Water || road.terrain == Terrain::Reeds) continue;
+            road.structure = Structure::Road;
+            road.road_traffic = 0;
+        }
+    }
 
     [[nodiscard]] bool in_bounds(int x, int y) const;
     [[nodiscard]] const Tile& tile(int x, int y) const;
