@@ -23,7 +23,7 @@
 namespace egypt {
 using Color=common::Color; using ImageAsset=common::Image;
 struct Rect{int x,y,w,h; bool contains(int px,int py)const{return px>=x&&py>=y&&px<x+w&&py<y+h;}};
-enum class Screen{Menu,Game};
+enum class Screen{Menu,Game,Settings};
 enum class Tool{Inspect,Road,House,ClayPit,Potter,Bulldoze};
 
 class Framebuffer{
@@ -52,58 +52,101 @@ static void text(Framebuffer&fb,int x,int y,const std::string&s,Color c,int scal
 
 class Game{
 public:
-    explicit Game(Framebuffer&fb):fb_(fb),menu_(common::load_e16("build/assets/menu.e16")){if(!menu_.valid())std::cerr<<"Egypt: menu artwork failed to load\n";}
-    bool running()const{return running_;} bool dirty()const{return dirty_;} void rendered(){dirty_=false;} void resize(){dirty_=true;} void tick(){if(screen_==Screen::Game){world_.tick();dirty_=true;}}
+    explicit Game(Framebuffer&fb):fb_(fb),menu_(common::load_e16("build/assets/menu.e16")),view_w_(fb.width()),view_h_(fb.height()){if(!menu_.valid())std::cerr<<"Egypt: menu artwork failed to load\n";}
+    bool running()const{return running_;} bool dirty()const{return dirty_;} void rendered(){dirty_=false;}
+    void resize(){int dx=fb_.width()-view_w_,dy=fb_.height()-view_h_;cam_.origin_x+=dx/2;cam_.origin_y+=dy/3;view_w_=fb_.width();view_h_=fb_.height();dirty_=true;update_hover();}
+    void tick(){if(screen_==Screen::Game){world_.tick();dirty_=true;}}
+    void frame(double dt){
+        if(screen_!=Screen::Game||dragging_||!edge_scroll_)return;
+        if(over_game_ui(mx_,my_))return;
+        const int margin=18;
+        double dx=0.0,dy=0.0;
+        const double speed=scroll_speed_px_;
+        if(mx_<=margin)dx+=speed*dt;else if(mx_>=fb_.width()-1-margin)dx-=speed*dt;
+        if(my_<=78+margin)dy+=speed*dt;else if(my_>=fb_.height()-1-margin)dy-=speed*dt;
+        if(dx!=0.0||dy!=0.0){cam_.pan_x+=static_cast<int>(std::lround(dx));cam_.pan_y+=static_cast<int>(std::lround(dy));update_hover();dirty_=true;}
+    }
+    bool take_resize_request(int&w,int&h){if(!resize_pending_)return false;w=requested_w_;h=requested_h_;resize_pending_=false;return true;}
     void on_key(KeySym k){
-        if(k==XK_Escape){if(screen_==Screen::Game)screen_=Screen::Menu;else running_=false;dirty_=true;return;}
+        if(k==XK_Escape){
+            if(screen_==Screen::Game||screen_==Screen::Settings)screen_=Screen::Menu;else running_=false;
+            dragging_=false;dirty_=true;return;
+        }
+        if(screen_==Screen::Settings)return;
         if(screen_!=Screen::Game)return;
-        if(k==XK_Left)cam_.pan_x+=36; else if(k==XK_Right)cam_.pan_x-=36; else if(k==XK_Up)cam_.pan_y+=28; else if(k==XK_Down)cam_.pan_y-=28;
-        else if(k==XK_plus||k==XK_equal)cam_.zoom_percent=std::min(160,cam_.zoom_percent+10); else if(k==XK_minus)cam_.zoom_percent=std::max(50,cam_.zoom_percent-10);
+        const int step=48;
+        if(k==XK_Left||k==XK_a||k==XK_A)cam_.pan_x+=step;
+        else if(k==XK_Right||k==XK_d||k==XK_D)cam_.pan_x-=step;
+        else if(k==XK_Up||k==XK_w||k==XK_W)cam_.pan_y+=step;
+        else if(k==XK_Down||k==XK_s||k==XK_S)cam_.pan_y-=step;
+        else if(k==XK_plus||k==XK_equal)zoom_by(10);
+        else if(k==XK_minus)zoom_by(-10);
+        else if(k==XK_Home)reset_camera();
         else if(k>=XK_1&&k<=XK_6)tool_=static_cast<Tool>(k-XK_1);
         update_hover();dirty_=true;
     }
-    void on_motion(int x,int y){mx_=x;my_=y;int oldx=hover_x_,oldy=hover_y_;update_hover();if(oldx!=hover_x_||oldy!=hover_y_)dirty_=true;}
-    void on_click(int x,int y){mx_=x;my_=y;if(screen_==Screen::Menu){int b=menu_button_at(x,y);if(b==0){screen_=Screen::Game;status_.clear();reset_camera();}else if(b==2)status_="SETTINGS WILL FOLLOW THE PLAYABLE CITY SLICE";else if(b==3)running_=false;dirty_=true;return;}
+    void on_motion(int x,int y){
+        const int oldx=hover_x_,oldy=hover_y_;
+        if(dragging_){cam_.pan_x+=x-drag_last_x_;cam_.pan_y+=y-drag_last_y_;drag_last_x_=x;drag_last_y_=y;}
+        mx_=x;my_=y;update_hover();
+        if(dragging_||oldx!=hover_x_||oldy!=hover_y_)dirty_=true;
+        if(screen_==Screen::Menu||screen_==Screen::Settings)dirty_=true;
+    }
+    void on_button_press(unsigned button,int x,int y){
+        mx_=x;my_=y;
+        if(screen_==Screen::Game&&(button==Button4||button==Button5)){zoom_by(button==Button4?10:-10);update_hover();dirty_=true;return;}
+        if(screen_==Screen::Game&&(button==Button2||button==Button3)&&drag_pan_){dragging_=true;drag_button_=button;drag_last_x_=x;drag_last_y_=y;dirty_=true;return;}
+        if(button==Button1)on_click(x,y);
+    }
+    void on_button_release(unsigned button,int x,int y){mx_=x;my_=y;if(dragging_&&button==drag_button_){dragging_=false;update_hover();dirty_=true;}}
+    void on_click(int x,int y){
+        mx_=x;my_=y;
+        if(screen_==Screen::Menu){int b=menu_button_at(x,y);if(b==0){screen_=Screen::Game;status_.clear();reset_camera();}else if(b==2)screen_=Screen::Settings;else if(b==3)running_=false;dirty_=true;return;}
+        if(screen_==Screen::Settings){handle_settings_click(x,y);return;}
         if(main_menu_rect().contains(x,y)){screen_=Screen::Menu;dirty_=true;return;}
         auto tb=tool_buttons();for(int i=0;i<6;++i)if(tb[i].contains(x,y)){tool_=static_cast<Tool>(i);dirty_=true;return;}
         update_hover();if(!world_.in_bounds(hover_x_,hover_y_))return;selected_x_=hover_x_;selected_y_=hover_y_;
         if(tool_==Tool::Bulldoze)world_.bulldoze(selected_x_,selected_y_);else if(tool_!=Tool::Inspect)world_.place(tool_structure(),selected_x_,selected_y_);dirty_=true;
     }
-    void draw(){screen_==Screen::Menu?draw_menu():draw_game();}
+    void draw(){if(screen_==Screen::Menu)draw_menu();else if(screen_==Screen::Settings)draw_settings();else draw_game();}
 private:
-    Framebuffer&fb_;ImageAsset menu_;World world_;IsoCamera cam_;Screen screen_=Screen::Menu;Tool tool_=Tool::Inspect;bool running_=true,dirty_=true;int mx_=0,my_=0,hover_x_=-1,hover_y_=-1,selected_x_=-1,selected_y_=-1;std::string status_="PRE-ALPHA - NATIVE ENGINE";
+    Framebuffer&fb_;ImageAsset menu_;World world_;IsoCamera cam_;Screen screen_=Screen::Menu;Tool tool_=Tool::Inspect;bool running_=true,dirty_=true;
+    int mx_=0,my_=0,hover_x_=-1,hover_y_=-1,selected_x_=-1,selected_y_=-1;std::string status_="PRE-ALPHA - NATIVE ENGINE";
+    int view_w_=0,view_h_=0;bool edge_scroll_=true,drag_pan_=true,dragging_=false;unsigned drag_button_=0;int drag_last_x_=0,drag_last_y_=0;double scroll_speed_px_=620.0;
+    bool resize_pending_=false;int requested_w_=1280,requested_h_=720;int resolution_index_=0;
     const Color gold{217,177,95},pale{242,215,154},panel{19,14,12},hi{55,40,27};
+    static constexpr std::array<std::array<int,2>,3> kResolutions{{{{1280,720}},{{1600,900}},{{1920,1080}}}};
+    void zoom_by(int delta){cam_.zoom_percent=std::clamp(cam_.zoom_percent+delta,50,180);}
     void reset_camera(){cam_.origin_x=fb_.width()/2+80;cam_.origin_y=150;cam_.pan_x=-260;cam_.pan_y=-30;cam_.zoom_percent=90;update_hover();}
+    bool over_game_ui(int x,int y)const{if(y<78||y>=fb_.height()-62)return true;if(main_menu_rect().contains(x,y))return true;if(Rect{fb_.width()-340,82,330,108}.contains(x,y))return true;return false;}
     std::array<Rect,4> menu_buttons()const{int x=72,y=300,w=340,h=50,g=12;return{Rect{x,y,w,h},Rect{x,y+h+g,w,h},Rect{x,y+2*(h+g),w,h},Rect{x,y+3*(h+g),w,h}};}
     int menu_button_at(int x,int y)const{auto b=menu_buttons();for(int i=0;i<4;++i)if(b[i].contains(x,y))return i;return-1;}
     Rect main_menu_rect()const{return{fb_.width()-210,18,190,42};}
     std::array<Rect,6> tool_buttons()const{std::array<Rect,6> r{};int x=18,y=fb_.height()-54,w=118,h=38,g=8;for(int i=0;i<6;++i)r[i]={x+i*(w+g),y,w,h};return r;}
+    Rect settings_back()const{return{fb_.width()/2-100,fb_.height()-92,200,44};}
+    std::array<Rect,3> resolution_buttons()const{int cx=fb_.width()/2;return{Rect{cx-330,240,200,44},Rect{cx-100,240,200,44},Rect{cx+130,240,200,44}};}
+    Rect edge_scroll_rect()const{return{fb_.width()/2-165,338,330,44};}
+    std::array<Rect,3> speed_buttons()const{int cx=fb_.width()/2;return{Rect{cx-260,440,160,44},Rect{cx-80,440,160,44},Rect{cx+100,440,160,44}};}
     void button(Rect r,const std::string&label,bool enabled,bool active=false){fb_.blend_rect(r,active?hi:panel,active?235:205);fb_.rect(r,enabled?gold:Color{90,78,65},2);text(fb_,r.x+10,r.y+12,label,enabled?pale:Color{115,105,92},2);}
     Structure tool_structure()const{switch(tool_){case Tool::Road:return Structure::Road;case Tool::House:return Structure::House;case Tool::ClayPit:return Structure::ClayPit;case Tool::Potter:return Structure::Potter;default:return Structure::Empty;}}
     const char* tool_name()const{switch(tool_){case Tool::Inspect:return"INSPECT";case Tool::Road:return"ROAD";case Tool::House:return"HOUSE";case Tool::ClayPit:return"CLAY PIT";case Tool::Potter:return"POTTER";case Tool::Bulldoze:return"BULLDOZE";}return"?";}
     void update_hover(){if(screen_!=Screen::Game){hover_x_=hover_y_=-1;return;}int x=0,y=0;if(!cam_.pick(mx_,my_,x,y)){hover_x_=hover_y_=-1;return;}if(world_.in_bounds(x,y)){hover_x_=x;hover_y_=y;}else hover_x_=hover_y_=-1;}
-    Color terrain_color(Terrain t)const{switch(t){case Terrain::Desert:return{191,139,73};case Terrain::Floodplain:return{113,132,77};case Terrain::Water:return{43,110,139};case Terrain::Clay:return{157,87,54};case Terrain::Reeds:return{73,122,72};}return{255,0,255};}
+    Color terrain_color(Terrain t,int x,int y)const{Color c{};switch(t){case Terrain::Desert:c={191,139,73};break;case Terrain::Floodplain:c={113,132,77};break;case Terrain::Water:c={43,110,139};break;case Terrain::Clay:c={157,87,54};break;case Terrain::Reeds:c={73,122,72};break;}const int jitter=((x*17+y*31)%9)-4;auto add=[&](std::uint8_t v){return static_cast<std::uint8_t>(std::clamp(int(v)+jitter,0,255));};return{add(c.r),add(c.g),add(c.b)};}
     void draw_block(IsoPoint p,int tw,int th,int height,Color top,Color left,Color right){int hw=tw/2,hh=th/2;IsoPoint bt{p.x,p.y-hh},br{p.x+hw,p.y},bb{p.x,p.y+hh},bl{p.x-hw,p.y};IsoPoint tt{bt.x,bt.y-height},tr{br.x,br.y-height},tb{bb.x,bb.y-height},tl{bl.x,bl.y-height};fb_.quad(bl,bb,tb,tl,left);fb_.quad(bb,br,tr,tb,right);fb_.quad(tt,tr,tb,tl,top);fb_.line(tt.x,tt.y,tr.x,tr.y,gold);fb_.line(tr.x,tr.y,tb.x,tb.y,gold);fb_.line(tb.x,tb.y,tl.x,tl.y,gold);fb_.line(tl.x,tl.y,tt.x,tt.y,gold);}
-    void draw_structure(const Tile&t,IsoPoint p,int tw,int th){switch(t.structure){case Structure::Empty:break;case Structure::Road:fb_.diamond(p,tw*3/4,th*3/4,{122,91,57},{103,72,43});break;case Structure::House:draw_block(p,tw*2/3,th*2/3,18,{190,151,91},{122,78,48},{145,92,51});break;case Structure::ClayPit:fb_.diamond({p.x,p.y+2},tw*2/3,th/2,{91,54,43},{66,42,33});break;case Structure::Potter:draw_block(p,tw*3/4,th*3/4,24,{165,122,79},{111,71,48},{133,82,51});fb_.fill_rect({p.x+8,p.y-39,5,18},{72,54,45});break;}}
+    void draw_structure(const Tile&t,IsoPoint p,int tw,int th){switch(t.structure){case Structure::Empty:break;case Structure::Road:fb_.diamond(p,tw*3/4,th*3/4,{122,91,57},{122,91,57});break;case Structure::House:draw_block(p,tw*2/3,th*2/3,18,{190,151,91},{122,78,48},{145,92,51});break;case Structure::ClayPit:fb_.diamond({p.x,p.y+2},tw*2/3,th/2,{91,54,43},{66,42,33});break;case Structure::Potter:draw_block(p,tw*3/4,th*3/4,24,{165,122,79},{111,71,48},{133,82,51});fb_.fill_rect({p.x+8,p.y-39,5,18},{72,54,45});break;}}
     void draw_menu(){if(menu_.valid())fb_.blit_cover(menu_);else fb_.clear({8,18,35});fb_.blend_rect({38,30,520,610},{5,4,4},112);text(fb_,72,72,"EGYPT",gold,8);text(fb_,74,151,"A LIVING CITY ON THE NILE",pale,3);fb_.fill_rect({72,205,420,2},gold);auto b=menu_buttons();button(b[0],"NEW GAME",true,b[0].contains(mx_,my_));button(b[1],"CONTINUE",false);button(b[2],"SETTINGS",true,b[2].contains(mx_,my_));button(b[3],"QUIT",true,b[3].contains(mx_,my_));if(!status_.empty())text(fb_,72,570,status_,{210,192,160},2);}
-    void draw_game(){
-        fb_.clear({47,34,28});fb_.fill_rect({0,0,fb_.width(),78},panel);text(fb_,20,14,"SETTLEMENT ON THE NILE",gold,3);std::string stats="POP "+std::to_string(world_.population())+"   TREASURY "+std::to_string(world_.treasury())+"   TICK "+std::to_string(world_.simulation_ticks())+"   TOOL "+tool_name();text(fb_,20,49,stats,pale,2);button(main_menu_rect(),"MAIN MENU",true,main_menu_rect().contains(mx_,my_));
-        const int tw=cam_.tile_w(),th=cam_.tile_h();
-        for(int sum=0;sum<World::kWidth+World::kHeight-1;++sum){for(int y=0;y<World::kHeight;++y){int x=sum-y;if(!world_.in_bounds(x,y))continue;IsoPoint p=cam_.project(x,y);if(p.x<-tw||p.x>fb_.width()+tw||p.y<70-th||p.y>fb_.height()+th)continue;const Tile&t=world_.tile(x,y);Color c=terrain_color(t.terrain);fb_.diamond(p,tw,th,c,{87,68,48});if(t.terrain==Terrain::Reeds){for(int k=-2;k<=2;++k)fb_.line(p.x+k*3,p.y,p.x+k*3+1,p.y-10,{40,82,43});}draw_structure(t,p,tw,th);}}
-        if(world_.in_bounds(hover_x_,hover_y_)){IsoPoint p=cam_.project(hover_x_,hover_y_);fb_.diamond_outline(p,tw,th,{255,230,130});}
-        auto tb=tool_buttons();const char* labels[6]={"INSPECT","ROAD","HOUSE","CLAY PIT","POTTER","BULLDOZE"};for(int i=0;i<6;++i)button(tb[i],labels[i],true,static_cast<int>(tool_)==i);
-        fb_.blend_rect({fb_.width()-330,88,312,94},{8,7,6},205);fb_.rect({fb_.width()-330,88,312,94},gold,1);if(world_.in_bounds(selected_x_,selected_y_)){const Tile&t=world_.tile(selected_x_,selected_y_);text(fb_,fb_.width()-314,101,"TILE "+std::to_string(selected_x_)+","+std::to_string(selected_y_),pale,2);text(fb_,fb_.width()-314,123,World::terrain_name(t.terrain),gold,2);text(fb_,fb_.width()-314,145,World::structure_name(t.structure),gold,2);if(t.structure==Structure::House)text(fb_,fb_.width()-160,145,"POP "+std::to_string(t.population),pale,2);}else text(fb_,fb_.width()-314,119,"CLICK A TILE TO INSPECT",pale,2);
-    }
+    void draw_settings(){if(menu_.valid())fb_.blit_cover(menu_);else fb_.clear({8,18,35});fb_.blend_rect({fb_.width()/2-390,74,780,fb_.height()-122},{6,5,4},220);fb_.rect({fb_.width()/2-390,74,780,fb_.height()-122},gold,2);text(fb_,fb_.width()/2-180,104,"DISPLAY OPTIONS",gold,4);text(fb_,fb_.width()/2-120,192,"WINDOW SIZE",pale,2);auto rb=resolution_buttons();for(int i=0;i<3;++i){std::string label=std::to_string(kResolutions[i][0])+"X"+std::to_string(kResolutions[i][1]);button(rb[i],label,true,i==resolution_index_);}text(fb_,fb_.width()/2-120,306,"MAP SCROLLING",pale,2);button(edge_scroll_rect(),std::string("EDGE SCROLL  ")+(edge_scroll_?"ON":"OFF"),true,edge_scroll_);text(fb_,fb_.width()/2-114,408,"SCROLL SPEED",pale,2);auto sb=speed_buttons();button(sb[0],"SLOW",true,scroll_speed_px_<500);button(sb[1],"NORMAL",true,scroll_speed_px_>=500&&scroll_speed_px_<850);button(sb[2],"FAST",true,scroll_speed_px_>=850);text(fb_,fb_.width()/2-300,520,"RIGHT OR MIDDLE DRAG PANS THE MAP",pale,2);text(fb_,fb_.width()/2-300,546,"MOUSE WHEEL ZOOMS   ARROWS OR WASD PAN",pale,2);button(settings_back(),"BACK",true,settings_back().contains(mx_,my_));}
+    void handle_settings_click(int x,int y){if(settings_back().contains(x,y)){screen_=Screen::Menu;dirty_=true;return;}auto rb=resolution_buttons();for(int i=0;i<3;++i)if(rb[i].contains(x,y)){resolution_index_=i;requested_w_=kResolutions[i][0];requested_h_=kResolutions[i][1];resize_pending_=true;dirty_=true;return;}if(edge_scroll_rect().contains(x,y)){edge_scroll_=!edge_scroll_;dirty_=true;return;}auto sb=speed_buttons();if(sb[0].contains(x,y))scroll_speed_px_=360.0;else if(sb[1].contains(x,y))scroll_speed_px_=620.0;else if(sb[2].contains(x,y))scroll_speed_px_=980.0;else return;dirty_=true;}
+    void draw_game(){fb_.clear({47,34,28});fb_.fill_rect({0,0,fb_.width(),78},panel);text(fb_,20,14,"SETTLEMENT ON THE NILE",gold,3);std::string stats="POP "+std::to_string(world_.population())+"   TREASURY "+std::to_string(world_.treasury())+"   TICK "+std::to_string(world_.simulation_ticks())+"   TOOL "+tool_name();text(fb_,20,49,stats,pale,2);button(main_menu_rect(),"MAIN MENU",true,main_menu_rect().contains(mx_,my_));const int tw=cam_.tile_w(),th=cam_.tile_h();for(int sum=0;sum<World::kWidth+World::kHeight-1;++sum){for(int y=0;y<World::kHeight;++y){int x=sum-y;if(!world_.in_bounds(x,y))continue;IsoPoint p=cam_.project(x,y);if(p.x<-tw||p.x>fb_.width()+tw||p.y<70-th||p.y>fb_.height()+th)continue;const Tile&t=world_.tile(x,y);Color c=terrain_color(t.terrain,x,y);fb_.diamond(p,tw,th,c,c);if(t.terrain==Terrain::Reeds){for(int k=-2;k<=2;++k)fb_.line(p.x+k*3,p.y,p.x+k*3+1,p.y-10,{40,82,43});}draw_structure(t,p,tw,th);}}if(world_.in_bounds(hover_x_,hover_y_)){IsoPoint p=cam_.project(hover_x_,hover_y_);fb_.diamond_outline(p,tw,th,{255,230,130});}auto tb=tool_buttons();const char* labels[6]={"INSPECT","ROAD","HOUSE","CLAY PIT","POTTER","BULLDOZE"};for(int i=0;i<6;++i)button(tb[i],labels[i],true,static_cast<int>(tool_)==i);fb_.blend_rect({fb_.width()-330,88,312,94},{8,7,6},205);fb_.rect({fb_.width()-330,88,312,94},gold,1);if(world_.in_bounds(selected_x_,selected_y_)){const Tile&t=world_.tile(selected_x_,selected_y_);text(fb_,fb_.width()-314,101,"TILE "+std::to_string(selected_x_)+","+std::to_string(selected_y_),pale,2);text(fb_,fb_.width()-314,123,World::terrain_name(t.terrain),gold,2);text(fb_,fb_.width()-314,145,World::structure_name(t.structure),gold,2);if(t.structure==Structure::House)text(fb_,fb_.width()-160,145,"POP "+std::to_string(t.population),pale,2);}else text(fb_,fb_.width()-314,119,"CLICK A TILE TO INSPECT",pale,2);text(fb_,18,fb_.height()-82,"EDGE PAN  RIGHT DRAG  WHEEL ZOOM  HOME RECENTERS",pale,2);}
 };
 
 class X11App{
 public:
-    X11App(int w,int h):fb_(w,h),game_(fb_){d_=XOpenDisplay(nullptr);if(!d_)throw std::runtime_error("Unable to open X11 display");s_=DefaultScreen(d_);win_=XCreateSimpleWindow(d_,RootWindow(d_,s_),100,100,w,h,0,BlackPixel(d_,s_),BlackPixel(d_,s_));XStoreName(d_,win_,"Egypt");XSelectInput(d_,win_,ExposureMask|KeyPressMask|ButtonPressMask|PointerMotionMask|StructureNotifyMask);del_=XInternAtom(d_,"WM_DELETE_WINDOW",False);XSetWMProtocols(d_,win_,&del_,1);gc_=XCreateGC(d_,win_,0,nullptr);XMapWindow(d_,win_);recreate(w,h);if(!infiltratr_fixed_step_configure(&scheduler_,1000000000ULL,4ULL,500000000ULL,8ULL))throw std::runtime_error("Common fixed-step scheduler configuration failed");infiltratr_fixed_step_reset(&scheduler_,now_ns());}
+    X11App(int w,int h):fb_(w,h),game_(fb_){d_=XOpenDisplay(nullptr);if(!d_)throw std::runtime_error("Unable to open X11 display");s_=DefaultScreen(d_);win_=XCreateSimpleWindow(d_,RootWindow(d_,s_),100,100,w,h,0,BlackPixel(d_,s_),BlackPixel(d_,s_));XStoreName(d_,win_,"Egypt");XSelectInput(d_,win_,ExposureMask|KeyPressMask|ButtonPressMask|ButtonReleaseMask|PointerMotionMask|StructureNotifyMask);del_=XInternAtom(d_,"WM_DELETE_WINDOW",False);XSetWMProtocols(d_,win_,&del_,1);gc_=XCreateGC(d_,win_,0,nullptr);XMapWindow(d_,win_);recreate(w,h);if(!infiltratr_fixed_step_configure(&scheduler_,1000000000ULL,4ULL,500000000ULL,8ULL))throw std::runtime_error("Common fixed-step scheduler configuration failed");infiltratr_fixed_step_reset(&scheduler_,now_ns());last_frame_ns_=now_ns();}
     ~X11App(){if(image_){std::free(image_->data);image_->data=nullptr;XDestroyImage(image_);}if(gc_)XFreeGC(d_,gc_);if(win_)XDestroyWindow(d_,win_);if(d_)XCloseDisplay(d_);}
-    int run(){while(game_.running()){while(XPending(d_)>0){XEvent e;XNextEvent(d_,&e);switch(e.type){case Expose:game_.resize();break;case ConfigureNotify:if(e.xconfigure.width!=fb_.width()||e.xconfigure.height!=fb_.height()){fb_.resize(e.xconfigure.width,e.xconfigure.height);recreate(e.xconfigure.width,e.xconfigure.height);game_.resize();}break;case MotionNotify:game_.on_motion(e.xmotion.x,e.xmotion.y);break;case ButtonPress:if(e.xbutton.button==Button1)game_.on_click(e.xbutton.x,e.xbutton.y);break;case KeyPress:game_.on_key(XLookupKeysym(&e.xkey,0));break;case ClientMessage:if(static_cast<Atom>(e.xclient.data.l[0])==del_)return 0;break;default:break;}}
-        InfiltratrFixedStepResult r{};if(infiltratr_fixed_step_advance(&scheduler_,now_ns(),&r))for(std::uint64_t i=0;i<r.steps_to_run;++i)game_.tick();if(game_.dirty()){game_.draw();present();game_.rendered();}std::this_thread::sleep_for(std::chrono::milliseconds(8));}return 0;}
+    int run(){while(game_.running()){while(XPending(d_)>0){XEvent e;XNextEvent(d_,&e);switch(e.type){case Expose:game_.resize();break;case ConfigureNotify:if(e.xconfigure.width!=fb_.width()||e.xconfigure.height!=fb_.height()){fb_.resize(e.xconfigure.width,e.xconfigure.height);recreate(e.xconfigure.width,e.xconfigure.height);game_.resize();}break;case MotionNotify:game_.on_motion(e.xmotion.x,e.xmotion.y);break;case ButtonPress:game_.on_button_press(e.xbutton.button,e.xbutton.x,e.xbutton.y);break;case ButtonRelease:game_.on_button_release(e.xbutton.button,e.xbutton.x,e.xbutton.y);break;case KeyPress:game_.on_key(XLookupKeysym(&e.xkey,0));break;case ClientMessage:if(static_cast<Atom>(e.xclient.data.l[0])==del_)return 0;break;default:break;}}const std::uint64_t now=now_ns();double dt=static_cast<double>(now-last_frame_ns_)/1000000000.0;last_frame_ns_=now;game_.frame(std::clamp(dt,0.0,0.05));int rw=0,rh=0;if(game_.take_resize_request(rw,rh))XResizeWindow(d_,win_,static_cast<unsigned>(rw),static_cast<unsigned>(rh));InfiltratrFixedStepResult r{};if(infiltratr_fixed_step_advance(&scheduler_,now,&r))for(std::uint64_t i=0;i<r.steps_to_run;++i)game_.tick();if(game_.dirty()){game_.draw();present();game_.rendered();}std::this_thread::sleep_for(std::chrono::milliseconds(8));}return 0;}
 private:
-    Display*d_=nullptr;int s_=0;Window win_=0;GC gc_=0;Atom del_=0;XImage*image_=nullptr;Framebuffer fb_;Game game_;InfiltratrFixedStepScheduler scheduler_{};
+    Display*d_=nullptr;int s_=0;Window win_=0;GC gc_=0;Atom del_=0;XImage*image_=nullptr;Framebuffer fb_;Game game_;InfiltratrFixedStepScheduler scheduler_{};std::uint64_t last_frame_ns_=0;
     static std::uint64_t now_ns(){return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());}
     static unsigned long pack(std::uint8_t v,unsigned long mask){if(!mask)return 0;unsigned sh=0;while(((mask>>sh)&1UL)==0UL)++sh;unsigned long max=mask>>sh;return((static_cast<unsigned long>(v)*max+127UL)/255UL<<sh)&mask;}
     void recreate(int w,int h){if(image_){std::free(image_->data);image_->data=nullptr;XDestroyImage(image_);image_=nullptr;}image_=XCreateImage(d_,DefaultVisual(d_,s_),DefaultDepth(d_,s_),ZPixmap,0,nullptr,w,h,32,0);if(!image_)throw std::runtime_error("Unable to create XImage");image_->data=static_cast<char*>(std::calloc(static_cast<std::size_t>(image_->bytes_per_line)*h,1));if(!image_->data)throw std::bad_alloc();}
