@@ -58,3 +58,38 @@ The game can do almost nothing beyond that at first. The purpose is to establish
 A brief Godot bootstrap was committed while exploring the fastest route to a start screen. That direction was rejected before becoming part of the architecture.
 
 No future Egypt implementation should depend on Godot files, GDScript, Godot scenes, Godot runtime behaviour, or Godot packaging.
+
+## TD-005 — Isometric 2.5D presentation
+
+**Date:** 2026-09-12
+
+**Status:** DECIDED
+
+The city view will use an isometric 2.5D presentation.
+
+The authoritative simulation remains a normal logical 2D world/grid. Rendering projects those coordinates into an angled isometric view. Terrain is represented as isometric tiles; structures, vegetation, citizens, carts, boats and effects may extend vertically above their ground tile and are depth-ordered in presentation space.
+
+This deliberately preserves the readability and city-planning feel of classic isometric city builders without requiring a full free-rotation 3D engine.
+
+Initial rendering rules:
+
+- square logical map coordinates are authoritative;
+- isometric projection is a presentation transform only;
+- map-to-screen and screen-to-map transforms must both exist;
+- camera pan and zoom are required;
+- terrain, decals, structures, agents and overlays are separate conceptual layers;
+- rendering order must account for tile depth and vertical height;
+- arbitrary 3D camera rotation is not part of the initial design;
+- future elevation is allowed without replacing the world model.
+
+## TD-006 — Reuse Infiltratr Common before inventing local infrastructure
+
+**Date:** 2026-09-12
+
+**Status:** DECIDED
+
+Egypt must use the shared Infiltratr Common library where Common already provides a suitable implementation. Game-specific code remains in Egypt; generally reusable primitives belong in Common.
+
+Egypt currently pins Common 1.16.0. The first simulation loop uses Common's exact fixed-step scheduler rather than inventing a private accumulator.
+
+When outside projects are researched, their code is reference material unless Shannon deliberately approves importing a compatible dependency. We may study architecture, algorithms and design patterns, then implement the required behaviour in Egypt/Common. We do not silently add an engine, runtime or third-party asset package merely because it would be convenient.
