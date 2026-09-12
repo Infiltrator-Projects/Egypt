@@ -34,19 +34,36 @@ public:
             atmosphere_redraw_ = 0.0;
             dirty_ = true;
         }
-        if (screen_ != Screen::Game || dragging_ || !edge_scroll_ || over_game_ui(mx_, my_)) return;
-        const int margin = 18;
-        double dx = 0.0, dy = 0.0;
-        if (mx_ <= margin) dx += scroll_speed_px_ * dt;
-        else if (mx_ >= fb_.width() - 1 - margin) dx -= scroll_speed_px_ * dt;
-        if (my_ <= 78 + margin) dy += scroll_speed_px_ * dt;
-        else if (my_ >= fb_.height() - 1 - margin) dy -= scroll_speed_px_ * dt;
-        if (dx != 0.0 || dy != 0.0) {
-            cam_.pan_x += static_cast<int>(std::lround(dx));
-            cam_.pan_y += static_cast<int>(std::lround(dy));
-            update_hover();
-            dirty_ = true;
+        if (screen_ != Screen::Game || dragging_) return;
+
+        double dx = 0.0;
+        double dy = 0.0;
+        const double keyboard_speed = scroll_speed_px_ * 1.15;
+        if (pan_left_) dx += keyboard_speed * dt;
+        if (pan_right_) dx -= keyboard_speed * dt;
+        if (pan_up_) dy += keyboard_speed * dt;
+        if (pan_down_) dy -= keyboard_speed * dt;
+
+        if (edge_scroll_) {
+            constexpr int margin = 48;
+            constexpr int hard_edge = 8;
+            auto strength = [](int distance) {
+                const double penetration = 1.0 - std::clamp(double(distance) / double(margin), 0.0, 1.0);
+                return 0.55 + 0.45 * penetration;
+            };
+
+            if (mx_ < margin) dx += scroll_speed_px_ * strength(mx_) * dt;
+            else if (mx_ >= fb_.width() - margin) dx -= scroll_speed_px_ * strength(fb_.width() - 1 - mx_) * dt;
+
+            const bool over_ui = over_game_ui(mx_, my_);
+            if (my_ < margin && (!over_ui || my_ <= hard_edge)) {
+                dy += scroll_speed_px_ * strength(my_) * dt;
+            } else if (my_ >= fb_.height() - margin && (!over_ui || my_ >= fb_.height() - 1 - hard_edge)) {
+                dy -= scroll_speed_px_ * strength(fb_.height() - 1 - my_) * dt;
+            }
         }
+
+        apply_camera_motion(dx, dy);
     }
 
     bool take_resize_request(int& w, int& h) {
@@ -57,8 +74,9 @@ public:
         return true;
     }
 
-    void on_key(KeySym key) {
+    void on_key_press(KeySym key) {
         if (key == XK_Escape) {
+            pan_left_ = pan_right_ = pan_up_ = pan_down_ = false;
             if (screen_ == Screen::Game || screen_ == Screen::Settings) screen_ = Screen::Menu;
             else running_ = false;
             dragging_ = false;
@@ -66,18 +84,19 @@ public:
             return;
         }
         if (screen_ != Screen::Game) return;
-        const int step = 48;
-        if (key == XK_Left || key == XK_a || key == XK_A) cam_.pan_x += step;
-        else if (key == XK_Right || key == XK_d || key == XK_D) cam_.pan_x -= step;
-        else if (key == XK_Up || key == XK_w || key == XK_W) cam_.pan_y += step;
-        else if (key == XK_Down || key == XK_s || key == XK_S) cam_.pan_y -= step;
-        else if (key == XK_plus || key == XK_equal) zoom_by(10);
+
+        set_pan_key(key, true);
+        if (key == XK_plus || key == XK_equal) zoom_by(10);
         else if (key == XK_minus) zoom_by(-10);
         else if (key == XK_Home) reset_camera();
         else if (key == XK_space) paused_ = !paused_;
         else if (key == XK_f || key == XK_F) flat_mode_ = !flat_mode_;
         update_hover();
         dirty_ = true;
+    }
+
+    void on_key_release(KeySym key) {
+        set_pan_key(key, false);
     }
 
     void on_motion(int x, int y) {
@@ -87,6 +106,8 @@ public:
             cam_.pan_y += y - drag_last_y_;
             drag_last_x_ = x;
             drag_last_y_ = y;
+            pan_fraction_x_ = 0.0;
+            pan_fraction_y_ = 0.0;
         }
         mx_ = x;
         my_ = y;
