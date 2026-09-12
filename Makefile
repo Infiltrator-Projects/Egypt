@@ -2,6 +2,7 @@ SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 
 CMAKE ?= cmake
+PYTHON ?= python3
 BUILD_DIR ?= build
 BUILD_TYPE ?= Release
 
@@ -9,13 +10,16 @@ TARGET := $(BUILD_DIR)/egypt
 MENU_ASSET := $(BUILD_DIR)/assets/menu.e16
 MENU_PARTS := $(sort $(wildcard assets/menu_q20_xz_*.b64))
 MENU_SHA256 := e22ea3d3689495f83b6bd31437806ff897fff530f3d8420579f142bd3a1337c9
+HUD_STAMP := $(BUILD_DIR)/assets/.hud-art.stamp
+HUD_BUILDER := tools/build_hud_assets.py
 
-.PHONY: all configure run clean menu-asset
+.PHONY: all configure run clean menu-asset hud-assets
 
 all: configure
 	$(CMAKE) --build $(BUILD_DIR) --parallel
 
 menu-asset: $(MENU_ASSET)
+hud-assets: $(HUD_STAMP)
 
 $(MENU_ASSET): $(MENU_PARTS)
 	@printf 'Preparing verified 640x360 Egypt menu artwork...\n'
@@ -27,7 +31,15 @@ $(MENU_ASSET): $(MENU_PARTS)
 	@echo "$(MENU_SHA256)  $(MENU_ASSET).tmp" | sha256sum -c -
 	@mv $(MENU_ASSET).tmp $(MENU_ASSET)
 
-configure: $(MENU_ASSET)
+$(HUD_STAMP): $(HUD_BUILDER)
+	@printf 'Building graphical HUD surfaces...\n'
+	@mkdir -p $(BUILD_DIR)/assets
+	@$(PYTHON) $(HUD_BUILDER) $(BUILD_DIR)/assets
+	@test "$$(head -c 4 $(BUILD_DIR)/assets/hud_chrome.e8p)" = "E8PA" || { echo 'Egypt HUD chrome failed to build'; exit 1; }
+	@test "$$(head -c 4 $(BUILD_DIR)/assets/hud_glyphs.e8p)" = "E8PA" || { echo 'Egypt HUD glyph artwork failed to build'; exit 1; }
+	@touch $(HUD_STAMP)
+
+configure: $(MENU_ASSET) $(HUD_STAMP)
 	$(CMAKE) -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE)
 
 run: all
