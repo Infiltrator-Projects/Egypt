@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 project(Egypt VERSION 0.1.0 LANGUAGES C CXX)
 
+include(CTest)
 include(FetchContent)
 
 # Use the canonical shared Infiltratr Common release. Pin the exact reviewed
@@ -28,6 +29,20 @@ target_compile_features(egypt PRIVATE cxx_std_20)
 set_target_properties(egypt PROPERTIES CXX_EXTENSIONS OFF)
 target_link_libraries(egypt PRIVATE InfiltratrCommon::Portable X11::X11)
 
+if(BUILD_TESTING)
+    add_executable(egypt-world-smoke
+        tests/world_smoke.cpp
+        src/world.cpp
+    )
+    target_include_directories(egypt-world-smoke PRIVATE src)
+    target_compile_features(egypt-world-smoke PRIVATE cxx_std_20)
+    set_target_properties(egypt-world-smoke PROPERTIES CXX_EXTENSIONS OFF)
+    add_test(NAME egypt-world-smoke COMMAND egypt-world-smoke)
+endif()
+
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     target_compile_options(egypt PRIVATE -Wall -Wextra -Wpedantic)
+    if(BUILD_TESTING)
+        target_compile_options(egypt-world-smoke PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
 endif()
