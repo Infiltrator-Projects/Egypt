@@ -12,7 +12,7 @@ public:
         XSelectInput(display_,window_,ExposureMask|KeyPressMask|ButtonPressMask|ButtonReleaseMask|PointerMotionMask|StructureNotifyMask);
         delete_atom_=XInternAtom(display_,"WM_DELETE_WINDOW",False);XSetWMProtocols(display_,window_,&delete_atom_,1);
         gc_=XCreateGC(display_,window_,0,nullptr);XMapWindow(display_,window_);recreate(w,h);
-        if(!infiltratr_fixed_step_configure(&scheduler_,1000000000ULL,4ULL,500000000ULL,8ULL))throw std::runtime_error("Common fixed-step scheduler configuration failed");
+        if(!infiltratr_fixed_step_configure(&scheduler_,1000000000ULL,16ULL,500000000ULL,16ULL))throw std::runtime_error("Common fixed-step scheduler configuration failed");
         const std::uint64_t start=now_ns();
         infiltratr_fixed_step_reset(&scheduler_,start);last_frame_ns_=start;last_present_ns_=0;
     }
