@@ -25,6 +25,7 @@ int main() {
     if (!world.place(Structure::House, 21, 10)) fail("isolated house placement failed");
     for (int i = 0; i < 20; ++i) world.tick();
     if (world.tile(21, 10).population != 0) fail("isolated housing attracted settlers");
+    if (!world.bulldoze(21, 10) || !world.bulldoze(20, 10)) fail("isolated test district cleanup failed");
 
     for (int x = 0; x <= 29; ++x) {
         if (!world.place(Structure::Road, x, 11)) fail("kingdom road placement failed");
