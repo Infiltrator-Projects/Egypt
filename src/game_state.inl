@@ -17,7 +17,7 @@ private:
     bool pan_right_ = false;
     bool pan_up_ = false;
     bool pan_down_ = false;
-    unsigned drag_button_ = 0;
+    MouseButton drag_button_ = MouseButton::Unknown;
     int mx_ = 0, my_ = 0;
     int hover_x_ = -1, hover_y_ = -1;
     int selected_x_ = -1, selected_y_ = -1;
@@ -38,11 +38,11 @@ private:
 
     void zoom_by(int delta) { cam_.zoom_percent = std::clamp(cam_.zoom_percent + delta, 50, 180); }
 
-    void set_pan_key(KeySym key, bool down) {
-        if (key == XK_Left || key == XK_a || key == XK_A) pan_left_ = down;
-        else if (key == XK_Right || key == XK_d || key == XK_D) pan_right_ = down;
-        else if (key == XK_Up || key == XK_w || key == XK_W) pan_up_ = down;
-        else if (key == XK_Down || key == XK_s || key == XK_S) pan_down_ = down;
+    void set_pan_key(Key key, bool down) {
+        if (key == Key::Left || key == Key::A) pan_left_ = down;
+        else if (key == Key::Right || key == Key::D) pan_right_ = down;
+        else if (key == Key::Up || key == Key::W) pan_up_ = down;
+        else if (key == Key::Down || key == Key::S) pan_down_ = down;
     }
 
     void apply_camera_motion(double dx, double dy) {
