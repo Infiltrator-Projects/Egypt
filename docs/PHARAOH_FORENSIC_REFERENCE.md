@@ -203,3 +203,84 @@ When implementing a new feature from the Pharaoh reference, ask:
 - Are we preserving the useful gameplay idea while creating original code, art, balance and content?
 
 If those answers are poor, the feature is not finished.
+
+## 14. Road use and organic road evolution
+
+The reference walkthrough showed that a road is not visually frozen forever after placement. Frequently used routes become more established-looking over time.
+
+Egypt requirement:
+
+- Road tiles accumulate **traffic from actual agents that traverse them**.
+- Immigration groups contribute traffic proportional to the visible group using the route.
+- Commuting workers contribute traffic on outbound and return journeys.
+- Traffic history belongs to the simulation tile, not only to the renderer.
+- Road appearance should evolve from a fresh track toward a visibly established route as cumulative use rises.
+- The first bootstrap states are **New Track → Worn Road → Established Road**.
+- These names/thresholds are original bootstrap values and can be rebalanced later.
+- Future systems may make heavily used roads affect travel speed, maintenance, congestion or desirability, but road quality must not become an unexplained global upgrade.
+- Inspecting a road should expose its traffic/use state.
+
+## 15. House inspection and causal diagnostics
+
+The reference house panel is a major design lesson, not incidental UI. Clicking a residence should answer **what is here, what it has, and exactly why it can or cannot improve**.
+
+Egypt's house inspector should grow toward showing:
+
+- current housing type/level;
+- occupants and spare capacity;
+- employed residents;
+- food held by the household;
+- other goods as those systems are introduced;
+- water/service access;
+- road access;
+- taxation once taxation exists;
+- health, fire, collapse and crime only after those systems genuinely exist;
+- neighbourhood/desirability once implemented;
+- a plain-language **next evolution blocker**.
+
+Examples of valid current diagnostic messages include:
+
+- `NEEDS ROAD ACCESS`
+- `NEEDS A RELIABLE FOOD SUPPLY`
+- `NEEDS WATER FROM A NEARBY WELL`
+- `FOOD AND WATER ARE STABILISING`
+- `SUSTAIN FOOD AND WATER TO EVOLVE`
+- `NEEDS MORE GOODS AND SERVICES FOR NEXT LEVEL`
+
+Do not fill the inspector with fake green statuses for systems that are not yet simulated. Add a field when the underlying simulation exists.
+
+## 16. Map navigation, minimap, time and simulation controls
+
+The walkthrough established several UI elements as functional requirements:
+
+- a whole-map minimap/overview in the lower-left;
+- the visible camera viewport shown on the minimap;
+- minimap navigation should eventually allow rapid repositioning of the main camera;
+- a flat/diagnostic building-footprint mode is useful and should remain available even after final art improves;
+- simulation controls must include pause and multiple speed levels;
+- the current month/year should be visible because time is part of the simulation, not merely decoration;
+- population and treasury belong in the primary simulation HUD.
+
+These systems should be original in presentation while preserving the useful information density of the reference.
+
+## 17. Atmospheric world layer
+
+The walkthrough also showed a lightweight atmospheric layer over the city:
+
+- moving cloud shadows pass across terrain and buildings;
+- water has visible surface motion;
+- birds/wildlife move independently of economic actors;
+- vegetation and ambient activity keep the map alive even when the player is not placing buildings.
+
+Egypt should add atmospheric effects as presentation driven by deterministic/lightweight state where practical. Cloud shadows are visual atmosphere and must not be confused with terrain fertility or gameplay darkness unless a later weather system deliberately gives them simulation effects.
+
+## 18. Current implementation checkpoint
+
+As of this forensic pass:
+
+- visible immigration, water-driven housing growth, visible employment/hunters, hunting food, granary stock and housing capacity are implemented in bootstrap form;
+- roads now accumulate traffic from actual immigrant and worker movement and expose three use/evolution levels;
+- the simulation exposes plain-language housing evolution diagnostics;
+- the richer full-screen house panel, road visual art states, minimap, time/speed HUD, flat diagnostic view and moving cloud shadows remain presentation work to build on top of those simulation hooks.
+
+The distinction matters: a behaviour is only marked implemented here when the underlying simulation state exists, not merely because the reference screenshot has been documented.
