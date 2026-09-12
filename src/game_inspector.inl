@@ -71,9 +71,60 @@
     }
 
     void draw_game() {
-        fb_.clear({47,34,28});
-        fb_.fill_rect({0,0,fb_.width(),78},panel);
+        // World first.  UI is an overlay and must never be overwritten by the
+        // isometric map (the old order produced the visible sawtooth HUD edge).
+        fb_.clear({194,153,88});
 
+        const int tw=cam_.tile_w(),th=cam_.tile_h();
+        const int water_phase=static_cast<int>(atmosphere_time_*5.0);
+
+        // Work out which logical coordinates cover the current viewport and
+        // draw a presentation-only terrain apron outside the finite simulation
+        // grid.  This removes the giant diamond/triangle board silhouette while
+        // keeping interaction and simulation strictly inside World::kWidth x kHeight.
+        std::array<IsoPoint,4> logical_corners{};
+        const std::array<IsoPoint,4> screen_corners{{
+            {0,0},{fb_.width()-1,0},{0,fb_.height()-1},{fb_.width()-1,fb_.height()-1}
+        }};
+        for(std::size_t i=0;i<screen_corners.size();++i){
+            int tx=0,ty=0;
+            cam_.pick(screen_corners[i].x,screen_corners[i].y,tx,ty);
+            logical_corners[i]={tx,ty};
+        }
+        int min_x=logical_corners[0].x,max_x=logical_corners[0].x;
+        int min_y=logical_corners[0].y,max_y=logical_corners[0].y;
+        for(const auto& c:logical_corners){
+            min_x=std::min(min_x,c.x);max_x=std::max(max_x,c.x);
+            min_y=std::min(min_y,c.y);max_y=std::max(max_y,c.y);
+        }
+        min_x-=4;max_x+=4;min_y-=4;max_y+=4;
+
+        for(int sum=min_x+min_y;sum<=max_x+max_y;++sum){
+            for(int y=min_y;y<=max_y;++y){
+                const int x=sum-y;
+                if(x<min_x||x>max_x)continue;
+                const IsoPoint p=cam_.project(x,y);
+                if(p.x<-tw||p.x>fb_.width()+tw||p.y<-th||p.y>fb_.height()+th)continue;
+                const Terrain terrain=presentation_terrain(x,y);
+                draw_ground_tile(x,y,terrain,p,tw,th,water_phase);
+                if(world_.in_bounds(x,y)){
+                    const Tile& tile=world_.tile(x,y);
+                    draw_structure_at(x,y,tile,p,tw,th);
+                }
+            }
+        }
+
+        draw_cloud_shadows();
+        draw_agents();
+
+        if(world_.in_bounds(hover_x_,hover_y_)){
+            const IsoPoint p=cam_.project(hover_x_,hover_y_);
+            fb_.diamond_outline(p,tw,th,{255,230,130});
+        }
+
+        // HUD and controls are deliberately last so the world can never cut
+        // sawteeth, triangles or other map geometry through interface panels.
+        fb_.fill_rect({0,0,fb_.width(),78},panel);
         const auto sr=speed_rects();
         button(sr[0],paused_?"PLAY":"PAUSE",true,paused_,1);
         button(sr[1],"X1",true,!paused_&&simulation_speed_==1,2);
@@ -91,22 +142,6 @@
         text(fb_,280,48,stats,pale,1);
         if(flat_mode_)text(fb_,fb_.width()-340,50,"FLAT DIAGNOSTIC VIEW",gold,1);
         button(main_menu_rect(),"MAIN MENU",true,main_menu_rect().contains(mx_,my_));
-
-        const int tw=cam_.tile_w(),th=cam_.tile_h();
-        const int water_phase=static_cast<int>(atmosphere_time_*5.0);
-        for(int sum=0;sum<World::kWidth+World::kHeight-1;++sum){
-            for(int y=0;y<World::kHeight;++y){
-                const int x=sum-y;if(!world_.in_bounds(x,y))continue;
-                const IsoPoint p=cam_.project(x,y);if(p.x<-tw||p.x>fb_.width()+tw||p.y<70-th||p.y>fb_.height()+th)continue;
-                const Tile& tile=world_.tile(x,y);
-                draw_ground_tile(x,y,tile,p,tw,th,water_phase);
-                draw_structure_at(x,y,tile,p,tw,th);
-            }
-        }
-        draw_cloud_shadows();
-        draw_agents();
-
-        if(world_.in_bounds(hover_x_,hover_y_)){const IsoPoint p=cam_.project(hover_x_,hover_y_);fb_.diamond_outline(p,tw,th,{255,230,130});}
 
         draw_minimap();
         draw_inspector();
