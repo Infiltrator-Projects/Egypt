@@ -25,6 +25,16 @@ struct Tile {
     std::uint16_t food_stock = 0;
 };
 
+struct ImmigrantAgent {
+    int x = 0;
+    int y = 0;
+    int target_x = 0;
+    int target_y = 0;
+    std::uint8_t group_size = 1;
+    std::vector<std::size_t> road_path;
+    std::size_t path_position = 0;
+};
+
 class World {
 public:
     static constexpr int kWidth = 64;
@@ -46,6 +56,8 @@ public:
     [[nodiscard]] bool road_connected(int ax, int ay, int bx, int by) const;
     [[nodiscard]] int population() const;
     [[nodiscard]] int total_food() const;
+    [[nodiscard]] int immigrants_in_transit() const;
+    [[nodiscard]] const std::vector<ImmigrantAgent>& immigrants() const { return immigrants_; }
     [[nodiscard]] int treasury() const { return treasury_; }
     [[nodiscard]] std::uint64_t simulation_ticks() const { return ticks_; }
 
@@ -55,17 +67,22 @@ public:
 
 private:
     std::vector<Tile> tiles_;
+    std::vector<ImmigrantAgent> immigrants_;
     int treasury_ = 5000;
     std::uint64_t ticks_ = 0;
 
     [[nodiscard]] std::size_t index(int x, int y) const;
     [[nodiscard]] std::vector<std::size_t> adjacent_roads(int x, int y) const;
     [[nodiscard]] bool within_delivery_range(int ax, int ay, int bx, int by) const;
+    [[nodiscard]] std::vector<std::size_t> immigration_path_to(int house_x, int house_y) const;
+    [[nodiscard]] int pending_immigrants_for(int house_x, int house_y) const;
     void generate();
     void produce_food();
     void move_food_to_granaries();
     void move_food_to_markets();
     void feed_houses();
+    void create_immigration();
+    void move_immigrants();
 };
 
 } // namespace egypt
