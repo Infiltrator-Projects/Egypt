@@ -1,4 +1,5 @@
 #include "game.hpp"
+#include <X11/XKBlib.h>
 
 namespace egypt {
 
@@ -9,7 +10,9 @@ public:
         screen_=DefaultScreen(display_);
         window_=XCreateSimpleWindow(display_,RootWindow(display_,screen_),100,100,w,h,0,BlackPixel(display_,screen_),BlackPixel(display_,screen_));
         XStoreName(display_,window_,"Egypt");
-        XSelectInput(display_,window_,ExposureMask|KeyPressMask|ButtonPressMask|ButtonReleaseMask|PointerMotionMask|StructureNotifyMask);
+        XSelectInput(display_,window_,ExposureMask|KeyPressMask|KeyReleaseMask|ButtonPressMask|ButtonReleaseMask|PointerMotionMask|StructureNotifyMask);
+        Bool detectable=False;
+        XkbSetDetectableAutoRepeat(display_,True,&detectable);
         delete_atom_=XInternAtom(display_,"WM_DELETE_WINDOW",False);XSetWMProtocols(display_,window_,&delete_atom_,1);
         gc_=XCreateGC(display_,window_,0,nullptr);XMapWindow(display_,window_);recreate(w,h);
         if(!infiltratr_fixed_step_configure(&scheduler_,1000000000ULL,16ULL,500000000ULL,16ULL))throw std::runtime_error("Common fixed-step scheduler configuration failed");
@@ -39,7 +42,8 @@ public:
                     case MotionNotify:game_.on_motion(event.xmotion.x,event.xmotion.y);break;
                     case ButtonPress:game_.on_button_press(event.xbutton.button,event.xbutton.x,event.xbutton.y);break;
                     case ButtonRelease:game_.on_button_release(event.xbutton.button,event.xbutton.x,event.xbutton.y);break;
-                    case KeyPress:game_.on_key(XLookupKeysym(&event.xkey,0));break;
+                    case KeyPress:game_.on_key_press(XLookupKeysym(&event.xkey,0));break;
+                    case KeyRelease:game_.on_key_release(XLookupKeysym(&event.xkey,0));break;
                     case ClientMessage:if(static_cast<Atom>(event.xclient.data.l[0])==delete_atom_)return 0;break;
                     default:break;
                 }
