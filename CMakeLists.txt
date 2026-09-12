@@ -20,6 +20,7 @@ find_package(X11 REQUIRED)
 
 add_executable(egypt
     src/egypt.cpp
+    src/world.cpp
     src/common/image.cpp
 )
 
