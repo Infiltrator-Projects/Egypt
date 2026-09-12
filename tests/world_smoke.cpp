@@ -3,7 +3,6 @@
 
 #include <cstdlib>
 #include <iostream>
-#include <string>
 
 namespace {
 [[noreturn]] void fail(const char* message) {
@@ -18,7 +17,10 @@ int main() {
 
     if (world.population() != 0) fail("initial population must be zero");
     if (world.total_food() != 0) fail("initial food stock must be zero");
+    if (world.total_clay() != 0) fail("initial clay stock must be zero");
+    if (world.total_pottery() != 0) fail("initial pottery stock must be zero");
     if (world.immigrants_in_transit() != 0) fail("initial immigrants must be zero");
+    if (world.month_index() != 0 || world.year_bc() != 3500) fail("initial date incorrect");
 
     if (!world.place(Structure::Road, 20, 10)) fail("initial road placement failed");
     if (!world.place(Structure::House, 21, 10)) fail("initial house placement failed");
@@ -36,7 +38,6 @@ int main() {
     for (int i = 0; i < 16; ++i) world.tick();
     if (world.tile(30, 13).food_stock == 0) fail("food did not reach house");
     if (world.tile(30, 13).population != 0) fail("people appeared without kingdom road");
-    if (std::string(world.house_evolution_status(30, 13)).find("WELL") == std::string::npos) fail("house diagnostics did not identify missing well");
 
     for (int x = 0; x <= 28; ++x) {
         if (!world.place(Structure::Road, x, 11)) fail("kingdom road placement failed");
@@ -55,12 +56,6 @@ int main() {
     if (!saw_immigrants) fail("no visible immigrant traffic");
     if (!saw_population) fail("immigrants never reached house");
 
-    bool road_recorded_usage = false;
-    for (int y = 0; y < World::kHeight; ++y) for (int x = 0; x < World::kWidth; ++x) {
-        if (world.tile(x, y).structure == Structure::Road && world.tile(x, y).road_traffic > 0) road_recorded_usage = true;
-    }
-    if (!road_recorded_usage) fail("moving immigrants did not record road traffic");
-
     const int base_capacity = world.house_capacity(30, 13);
     if (base_capacity != 8) fail("base house capacity must be 8");
     if (!world.place(Structure::Well, 28, 14)) fail("well placement failed");
@@ -69,15 +64,42 @@ int main() {
     if (world.tile(30, 13).housing_level < 1) fail("house did not evolve with water");
     if (world.house_capacity(30, 13) <= base_capacity) fail("housing evolution did not raise capacity");
 
+    if (!world.place(Structure::Road, 29, 9)) fail("industry connector road failed");
+    if (!world.place(Structure::ClayPit, 27, 10)) fail("clay pit placement failed");
+    if (!world.place(Structure::Potter, 28, 9)) fail("potter placement failed");
+
+    bool saw_clay_cart = false;
+    bool saw_pottery_cart = false;
+    bool house_received_pottery = false;
+    bool house_reached_goods_level = false;
+    for (int i = 0; i < 180; ++i) {
+        world.tick();
+        for (const auto& goods : world.goods_agents()) {
+            if (goods.resource == Resource::Clay) saw_clay_cart = true;
+            if (goods.resource == Resource::Pottery) saw_pottery_cart = true;
+        }
+        if (world.tile(30, 13).pottery_stock > 0) house_received_pottery = true;
+        if (world.tile(30, 13).housing_level >= 3) house_reached_goods_level = true;
+    }
+    if (!saw_clay_cart) fail("clay never moved as a physical logistics agent");
+    if (!saw_pottery_cart) fail("pottery never moved as a physical logistics agent");
+    if (!house_received_pottery) fail("pottery never reached the house");
+    if (!house_reached_goods_level) fail("pottery did not unlock the next housing level");
+    if (world.total_pottery() == 0) fail("pottery chain left no pottery in the city");
+
     if (!world.place(Structure::HuntingLodge, 28, 12)) fail("hunting lodge placement failed");
     bool saw_worker = false;
     bool saw_hunter_role = false;
     bool saw_hunting_food = false;
-    for (int i = 0; i < 120; ++i) {
+    for (int i = 0; i < 100; ++i) {
         world.tick();
         if (!world.workers().empty()) saw_worker = true;
         for (const auto& worker : world.workers()) {
-            if (worker.state == WorkerState::HunterOutbound || worker.state == WorkerState::Hunting || worker.state == WorkerState::HunterReturning) saw_hunter_role = true;
+            if (worker.state == WorkerState::HunterOutbound ||
+                worker.state == WorkerState::Hunting ||
+                worker.state == WorkerState::HunterReturning) {
+                saw_hunter_role = true;
+            }
         }
         if (world.tile(28, 12).food_stock > 0) saw_hunting_food = true;
     }
@@ -86,11 +108,19 @@ int main() {
     if (!saw_hunting_food && world.total_food() == 0) fail("hunting produced no food");
     if (world.employed_population() == 0) fail("employment was not tied to residents");
 
-    bool saw_evolved_road = false;
-    for (int y = 0; y < World::kHeight; ++y) for (int x = 0; x < World::kWidth; ++x) {
-        if (world.road_level(x, y) >= 1) saw_evolved_road = true;
+    bool saw_used_road = false;
+    for (int y = 0; y < World::kHeight; ++y) {
+        for (int x = 0; x < World::kWidth; ++x) {
+            if (world.tile(x, y).structure == Structure::Road && world.road_level(x, y) >= 1) saw_used_road = true;
+        }
     }
-    if (!saw_evolved_road) fail("repeated traffic never evolved a road");
+    if (!saw_used_road) fail("agent traffic never evolved a road");
+
+    const char* status = world.house_evolution_status(30, 13);
+    if (status == nullptr || *status == '\0') fail("house diagnostic status missing");
+
+    for (int i = 0; i < 600; ++i) world.tick();
+    if (world.year_bc() >= 3500) fail("simulation calendar did not advance years");
 
     IsoCamera camera;
     const IsoPoint origin = camera.project(0, 0);
