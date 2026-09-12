@@ -7,6 +7,7 @@ public:
     [[nodiscard]] bool running() const { return running_; }
     [[nodiscard]] bool dirty() const { return dirty_; }
     void rendered() { dirty_ = false; }
+    void request_quit() { running_ = false; }
 
     void resize() {
         const int dx = fb_.width() - view_w_;
@@ -74,8 +75,8 @@ public:
         return true;
     }
 
-    void on_key_press(KeySym key) {
-        if (key == XK_Escape) {
+    void on_key_press(Key key) {
+        if (key == Key::Escape) {
             pan_left_ = pan_right_ = pan_up_ = pan_down_ = false;
             if (screen_ == Screen::Game || screen_ == Screen::Settings) screen_ = Screen::Menu;
             else running_ = false;
@@ -86,16 +87,16 @@ public:
         if (screen_ != Screen::Game) return;
 
         set_pan_key(key, true);
-        if (key == XK_plus || key == XK_equal) zoom_by(10);
-        else if (key == XK_minus) zoom_by(-10);
-        else if (key == XK_Home) reset_camera();
-        else if (key == XK_space) paused_ = !paused_;
-        else if (key == XK_f || key == XK_F) flat_mode_ = !flat_mode_;
+        if (key == Key::Plus) zoom_by(10);
+        else if (key == Key::Minus) zoom_by(-10);
+        else if (key == Key::Home) reset_camera();
+        else if (key == Key::Space) paused_ = !paused_;
+        else if (key == Key::F) flat_mode_ = !flat_mode_;
         update_hover();
         dirty_ = true;
     }
 
-    void on_key_release(KeySym key) {
+    void on_key_release(Key key) {
         set_pan_key(key, false);
     }
 
@@ -115,26 +116,26 @@ public:
         if (dragging_ || oldx != hover_x_ || oldy != hover_y_ || screen_ != Screen::Game) dirty_ = true;
     }
 
-    void on_button_press(unsigned button, int x, int y) {
+    void on_button_press(MouseButton button, int x, int y) {
         mx_ = x;
         my_ = y;
-        if (screen_ == Screen::Game && (button == Button4 || button == Button5)) {
-            zoom_by(button == Button4 ? 10 : -10);
+        if (screen_ == Screen::Game && (button == MouseButton::WheelUp || button == MouseButton::WheelDown)) {
+            zoom_by(button == MouseButton::WheelUp ? 10 : -10);
             update_hover();
             dirty_ = true;
             return;
         }
-        if (screen_ == Screen::Game && (button == Button2 || button == Button3) && drag_pan_) {
+        if (screen_ == Screen::Game && (button == MouseButton::Middle || button == MouseButton::Right) && drag_pan_) {
             dragging_ = true;
             drag_button_ = button;
             drag_last_x_ = x;
             drag_last_y_ = y;
             return;
         }
-        if (button == Button1) on_click(x, y);
+        if (button == MouseButton::Left) on_click(x, y);
     }
 
-    void on_button_release(unsigned button, int x, int y) {
+    void on_button_release(MouseButton button, int x, int y) {
         mx_ = x;
         my_ = y;
         if (dragging_ && button == drag_button_) {
