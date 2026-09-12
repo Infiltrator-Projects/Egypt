@@ -79,7 +79,7 @@ private:
         update_hover();
     }
 
-    Rect main_menu_rect() const { return {fb_.width() - 210, 18, 190, 42}; }
+    Rect main_menu_rect() const { return {fb_.width() - 222, 8, 210, 48}; }
     Rect minimap_rect() const { return {12, std::max(84, fb_.height() - 230), 196, 116}; }
 
     // The minimap is oriented in the same screen-space axes as the main
@@ -108,15 +108,15 @@ private:
     }
 
     std::array<Rect,4> speed_rects() const {
-        // Compact top-left medallions matching the reference game's HUD grammar:
-        // pause, play, faster, fastest.  Speed itself is shown separately.
         return {Rect{10,9,28,28},Rect{43,9,28,28},Rect{76,9,28,28},Rect{109,9,28,28}};
     }
 
     bool over_game_ui(int x, int y) const {
-        if (y < 78 || y >= fb_.height() - 104) return true;
+        if (y < 78 || y >= fb_.height() - 64) return true;
         if (main_menu_rect().contains(x, y) || minimap_rect().contains(x, y)) return true;
-        return Rect{fb_.width() - 520, 82, 510, 250}.contains(x, y);
+        if (world_.in_bounds(selected_x_, selected_y_) &&
+            Rect{fb_.width() - 520, 82, 510, 250}.contains(x, y)) return true;
+        return false;
     }
 
     std::array<Rect,4> menu_buttons() const {
@@ -132,10 +132,11 @@ private:
 
     std::array<Rect,11> tool_buttons() const {
         std::array<Rect,11> result{};
-        const int w = 112, h = 36, gap = 6;
-        const int first_y = fb_.height() - 92;
-        for (int i = 0; i < 6; ++i) result[i] = {14 + i * (w + gap), first_y, w, h};
-        for (int i = 6; i < 11; ++i) result[i] = {14 + (i - 6) * (w + gap), first_y + 42, w, h};
+        constexpr int w = 48, h = 48, gap = 4, count = 11;
+        constexpr int total = count * w + (count - 1) * gap;
+        const int first_x = std::max(220, fb_.width() / 2 - total / 2);
+        const int y = fb_.height() - 58;
+        for (int i = 0; i < count; ++i) result[i] = {first_x + i * (w + gap), y, w, h};
         return result;
     }
 
