@@ -57,20 +57,41 @@ public:
         }
     }
 
+    void fill_span(int y, int x0, int x1, Color c) {
+        if (y < 0 || y >= h_) return;
+        if (x0 > x1) std::swap(x0, x1);
+        x0 = std::max(0, x0);
+        x1 = std::min(w_ - 1, x1);
+        if (x0 > x1) return;
+        auto first = pixels_.begin() + static_cast<std::ptrdiff_t>(y * w_ + x0);
+        std::fill(first, first + (x1 - x0 + 1), c);
+    }
+
     void fill_rect(Rect r, Color c) {
-        for (int y = std::max(0, r.y); y < std::min(h_, r.y + r.h); ++y) {
-            for (int x = std::max(0, r.x); x < std::min(w_, r.x + r.w); ++x) pixel(x, y, c);
+        const int x0 = std::max(0, r.x);
+        const int x1 = std::min(w_, r.x + r.w);
+        const int y0 = std::max(0, r.y);
+        const int y1 = std::min(h_, r.y + r.h);
+        if (x0 >= x1 || y0 >= y1) return;
+        for (int y = y0; y < y1; ++y) {
+            auto first = pixels_.begin() + static_cast<std::ptrdiff_t>(y * w_ + x0);
+            std::fill(first, first + (x1 - x0), c);
         }
     }
 
     void blend_rect(Rect r, Color c, std::uint8_t alpha) {
+        const int x0 = std::max(0, r.x);
+        const int x1 = std::min(w_, r.x + r.w);
+        const int y0 = std::max(0, r.y);
+        const int y1 = std::min(h_, r.y + r.h);
+        if (x0 >= x1 || y0 >= y1) return;
         const unsigned inv = 255U - alpha;
-        for (int y = std::max(0, r.y); y < std::min(h_, r.y + r.h); ++y) {
-            for (int x = std::max(0, r.x); x < std::min(w_, r.x + r.w); ++x) {
-                Color& d = pixels_[static_cast<std::size_t>(y * w_ + x)];
-                d.r = static_cast<std::uint8_t>((d.r * inv + c.r * alpha) / 255U);
-                d.g = static_cast<std::uint8_t>((d.g * inv + c.g * alpha) / 255U);
-                d.b = static_cast<std::uint8_t>((d.b * inv + c.b * alpha) / 255U);
+        for (int y = y0; y < y1; ++y) {
+            Color* row = pixels_.data() + static_cast<std::size_t>(y * w_ + x0);
+            for (int x = x0; x < x1; ++x, ++row) {
+                row->r = static_cast<std::uint8_t>((row->r * inv + c.r * alpha) / 255U);
+                row->g = static_cast<std::uint8_t>((row->g * inv + c.g * alpha) / 255U);
+                row->b = static_cast<std::uint8_t>((row->b * inv + c.b * alpha) / 255U);
             }
         }
     }
@@ -96,20 +117,24 @@ public:
     }
 
     void triangle(int x0, int y0, int x1, int y1, int x2, int y2, Color c) {
-        const int minx = std::max(0, std::min({x0, x1, x2}));
-        const int maxx = std::min(w_ - 1, std::max({x0, x1, x2}));
-        const int miny = std::max(0, std::min({y0, y1, y2}));
-        const int maxy = std::min(h_ - 1, std::max({y0, y1, y2}));
-        auto edge = [](int ax, int ay, int bx, int by, int px, int py) {
-            return (px - ax) * (by - ay) - (py - ay) * (bx - ax);
+        struct V { int x; int y; };
+        std::array<V,3> v{{{x0,y0},{x1,y1},{x2,y2}}};
+        std::sort(v.begin(), v.end(), [](const V& a, const V& b) { return a.y < b.y; });
+        if (v[0].y == v[2].y) {
+            fill_span(v[0].y, std::min({v[0].x,v[1].x,v[2].x}), std::max({v[0].x,v[1].x,v[2].x}), c);
+            return;
+        }
+        auto edge_x = [](const V& a, const V& b, int y) {
+            if (a.y == b.y) return a.x;
+            const long long num = static_cast<long long>(b.x - a.x) * (y - a.y);
+            return a.x + static_cast<int>(num / (b.y - a.y));
         };
-        for (int y = miny; y <= maxy; ++y) {
-            for (int x = minx; x <= maxx; ++x) {
-                const int a = edge(x0, y0, x1, y1, x, y);
-                const int b = edge(x1, y1, x2, y2, x, y);
-                const int d = edge(x2, y2, x0, y0, x, y);
-                if ((a >= 0 && b >= 0 && d >= 0) || (a <= 0 && b <= 0 && d <= 0)) pixel(x, y, c);
-            }
+        const int from = std::max(0, v[0].y);
+        const int to = std::min(h_ - 1, v[2].y);
+        for (int y = from; y <= to; ++y) {
+            const int xa = edge_x(v[0], v[2], y);
+            const int xb = (y <= v[1].y) ? edge_x(v[0], v[1], y) : edge_x(v[1], v[2], y);
+            fill_span(y, xa, xb, c);
         }
     }
 
@@ -119,13 +144,43 @@ public:
     }
 
     void diamond(IsoPoint p, int tw, int th, Color fill, Color edge) {
-        const IsoPoint top{p.x, p.y - th / 2};
-        const IsoPoint right{p.x + tw / 2, p.y};
-        const IsoPoint bottom{p.x, p.y + th / 2};
-        const IsoPoint left{p.x - tw / 2, p.y};
-        triangle(top.x, top.y, right.x, right.y, bottom.x, bottom.y, fill);
-        triangle(top.x, top.y, bottom.x, bottom.y, left.x, left.y, fill);
-        diamond_outline(p, tw, th, edge);
+        const int hw = std::max(1, tw / 2);
+        const int hh = std::max(1, th / 2);
+        const int y0 = std::max(0, p.y - hh);
+        const int y1 = std::min(h_ - 1, p.y + hh);
+        for (int y = y0; y <= y1; ++y) {
+            const int dy = std::abs(y - p.y);
+            const int half = hw * (hh - std::min(hh, dy)) / hh;
+            fill_span(y, p.x - half, p.x + half, fill);
+        }
+        if (edge.r != fill.r || edge.g != fill.g || edge.b != fill.b) diamond_outline(p, tw, th, edge);
+    }
+
+    void diamond_gradient(IsoPoint p, int tw, int th, Color top, Color right, Color bottom, Color left) {
+        const int hw = std::max(1, tw / 2);
+        const int hh = std::max(1, th / 2);
+        const int y0 = std::max(0, p.y - hh);
+        const int y1 = std::min(h_ - 1, p.y + hh);
+        for (int y = y0; y <= y1; ++y) {
+            const bool upper = y <= p.y;
+            const int local = upper ? (y - (p.y - hh)) : (y - p.y);
+            const int denom = hh;
+            const int half = upper ? (hw * local / denom) : (hw * (hh - local) / denom);
+            const Color lc = upper ? lerp(top, left, local, denom) : lerp(left, bottom, local, denom);
+            const Color rc = upper ? lerp(top, right, local, denom) : lerp(right, bottom, local, denom);
+            int xa = p.x - half;
+            int xb = p.x + half;
+            if (xa > xb) std::swap(xa, xb);
+            const int clip_a = std::max(0, xa);
+            const int clip_b = std::min(w_ - 1, xb);
+            const int width = std::max(1, xb - xa);
+            if (y < 0 || y >= h_ || clip_a > clip_b) continue;
+            Color* dst = pixels_.data() + static_cast<std::size_t>(y * w_ + clip_a);
+            for (int x = clip_a; x <= clip_b; ++x, ++dst) {
+                const int t = x - xa;
+                *dst = lerp(lc, rc, t, width);
+            }
+        }
     }
 
     void diamond_outline(IsoPoint p, int tw, int th, Color edge) {
@@ -170,6 +225,17 @@ public:
     }
 
 private:
+    static Color lerp(Color a, Color b, int t, int denom) {
+        if (denom <= 0) return b;
+        t = std::clamp(t, 0, denom);
+        const int inv = denom - t;
+        return {
+            static_cast<std::uint8_t>((a.r * inv + b.r * t) / denom),
+            static_cast<std::uint8_t>((a.g * inv + b.g * t) / denom),
+            static_cast<std::uint8_t>((a.b * inv + b.b * t) / denom)
+        };
+    }
+
     int w_ = 1;
     int h_ = 1;
     std::vector<Color> pixels_;
