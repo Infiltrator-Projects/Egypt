@@ -17,38 +17,47 @@ int main() {
     World world;
 
     if (world.population() != 0) fail("initial population must be zero");
+    if (world.total_food() != 0) fail("initial food stock must be zero");
     if (world.treasury() != 5000) fail("initial treasury must be 5000");
 
-    int road_x = -1;
-    int road_y = -1;
-    int house_x = -1;
-    int house_y = -1;
+    // A house with a road but no food must remain empty. Roads are access,
+    // not an immigration spell.
+    if (!world.place(Structure::Road, 20, 10)) fail("initial road placement failed");
+    if (!world.place(Structure::House, 21, 10)) fail("initial house placement failed");
+    for (int i = 0; i < 12; ++i) world.tick();
+    if (world.tile(21, 10).population != 0) fail("house filled without food");
 
-    for (int y = 1; y < World::kHeight - 1 && road_x < 0; ++y) {
-        for (int x = 1; x < World::kWidth - 2; ++x) {
-            if (!world.can_place(Structure::Road, x, y)) continue;
-            if (!world.can_place(Structure::House, x + 1, y)) continue;
-            road_x = x;
-            road_y = y;
-            house_x = x + 1;
-            house_y = y;
-            break;
-        }
+    // Build a compact connected food chain on the west floodplain:
+    // farm -> road -> granary -> market -> house.
+    constexpr int farm_x = 28;
+    constexpr int farm_y = 10;
+    if (world.tile(farm_x, farm_y).terrain != Terrain::Floodplain) {
+        fail("known test farm tile is not floodplain");
     }
 
-    if (road_x < 0) fail("could not find valid adjacent road/house tiles");
-    if (!world.place(Structure::Road, road_x, road_y)) fail("road placement failed");
-    if (!world.place(Structure::House, house_x, house_y)) fail("house placement failed");
-    if (!world.has_road_access(house_x, house_y)) fail("house should have road access");
-    if (world.treasury() != 4988) fail("placement costs are incorrect");
+    for (int y = 10; y <= 14; ++y) {
+        if (!world.place(Structure::Road, 29, y)) fail("food-chain road placement failed");
+    }
+    if (!world.place(Structure::Farm, 28, 10)) fail("farm placement failed");
+    if (!world.place(Structure::Granary, 30, 11)) fail("granary placement failed");
+    if (!world.place(Structure::Market, 30, 12)) fail("market placement failed");
+    if (!world.place(Structure::House, 30, 13)) fail("fed house placement failed");
 
-    for (int i = 0; i < 8; ++i) world.tick();
-    if (world.tile(house_x, house_y).population != 8) fail("road-access house did not fill");
-    if (world.population() != 8) fail("population total is incorrect");
+    if (!world.road_connected(28, 10, 30, 11)) fail("farm and granary should share a road network");
+    if (!world.road_connected(30, 11, 30, 12)) fail("granary and market should share a road network");
+    if (!world.road_connected(30, 12, 30, 13)) fail("market and house should share a road network");
 
-    if (!world.bulldoze(road_x, road_y)) fail("road bulldoze failed");
+    for (int i = 0; i < 40; ++i) world.tick();
+
+    if (world.total_food() <= 0) fail("food chain produced no stored food");
+    if (world.tile(30, 13).population == 0) fail("fed road-access house attracted nobody");
+    if (world.population() == 0) fail("city population did not respond to food");
+
+    // Cutting road access must make the house decline even when it had food.
+    if (!world.bulldoze(29, 13)) fail("road bulldoze failed");
+    const auto before = world.tile(30, 13).population;
     world.tick();
-    if (world.tile(house_x, house_y).population != 7) fail("house should decline without road access");
+    if (world.tile(30, 13).population >= before) fail("house should decline without road access");
 
     IsoCamera camera;
     camera.origin_x = 640;
