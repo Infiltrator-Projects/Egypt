@@ -67,6 +67,7 @@ Consequences of this rule already established:
 - storage and market distribution requires real resident staff;
 - goods are physically located and physically moved;
 - houses visibly improve when requirements are sustained;
+- mature neighbouring houses can become one real multi-tile residence rather than merely sharing a renderer effect;
 - road use is recorded from actual traffic rather than a hidden arbitrary upgrade timer.
 
 ## Housing and immigration
@@ -89,8 +90,17 @@ Behaviour:
 - water from a nearby well allows early housing evolution once residents and food are present;
 - pottery is the first manufactured household good used for later evolution;
 - upgraded housing creates extra capacity and therefore can trigger another immigration wave;
+- four adjacent independent houses that all reach Established Residence or better can merge into one authoritative 2x2 residence;
+- the merged residence has one anchor identity and one shared population, employment pool, food stock, pottery stock, service state and evolution state;
+- workers, immigrants and household deliveries that belonged to any of the four former houses are retargeted to the merged residence anchor;
+- road and well service are evaluated across the full 2x2 footprint;
+- the merge grants additional compound capacity beyond the simple sum of four individual houses, creating another visible immigration opportunity;
+- clicking or addressing any member tile resolves to the same residence;
+- bulldozing any tile of an authoritative merged residence removes the whole residence footprint rather than leaving three phantom houses;
 - sustained loss of requirements can cause regression;
 - higher housing eventually depends on desirability and additional goods/services.
+
+The current 2x2 merge threshold, capacity bonus and names are bootstrap balance/content values. The important architectural decision is that multi-tile housing is simulation identity, not a renderer-only illusion.
 
 ## House inspection
 
@@ -98,13 +108,15 @@ Clicking a house now opens a substantially richer diagnostic panel than the orig
 
 Current information includes:
 
-- housing type/level;
-- occupants / capacity / spare capacity;
-- employed/free residents;
-- food stock;
-- pottery stock;
-- water service;
-- road access;
+- housing/residence type and level;
+- whether the residence is single-tile or a 2x2 compound;
+- authoritative anchor coordinates for a merged residence;
+- shared occupants / capacity / spare capacity;
+- shared employed/free residents;
+- shared food stock;
+- shared pottery stock;
+- water service across the residence footprint;
+- road access across the residence footprint;
 - desirability;
 - plain-language next-evolution blocker.
 
@@ -126,11 +138,13 @@ Actual immigrants, workers and logistics agents add traffic as they traverse roa
 
 Current chain:
 
-**staffed farm / staffed hunting lodge → physical food cart → staffed granary → physical food cart → staffed market → physical food cart → house**
+**staffed farm / staffed hunting lodge → physical food cart → staffed granary → physical food cart → staffed market → physical food cart → house/residence**
 
 Food no longer transfers instantaneously between these stages. Dispatch removes stock from the source, creates a `GoodsAgent`, routes it over the actual road network, and deposits the load only when the agent arrives. Food in transit remains part of the city's total-food accounting and its movement contributes road traffic.
 
-Farms produce only while their resident farmer is at work. Granaries and markets have resident staff and distribution pauses when the relevant workplace is not active. Granaries, markets, farms, hunting lodges and houses all hold real local food stock. A broken road physically breaks the delivery chain rather than leaving an invisible city-wide supply connection.
+Farms produce only while their resident farmer is at work. Granaries and markets have resident staff and distribution pauses when the relevant workplace is not active. Granaries, markets, farms, hunting lodges and residences all hold real local food stock. A broken road physically breaks the delivery chain rather than leaving an invisible city-wide supply connection.
+
+Merged residences store and consume household food as a single household entity. Their demand scales with their combined population rather than four subordinate tiles continuing to consume independently.
 
 The current staffing numbers and shift durations are bootstrap balance values, not final economy balance.
 
@@ -151,7 +165,7 @@ Current resident roles are:
 - Market Worker;
 - Hunter.
 
-Farms, clay pits, potters, granaries, markets and hunting lodges therefore have explicit staffing requirements. Workers remain members of their home household while employed and their commute contributes road traffic. The inspector reports assigned staff, workplace capacity and how many staff are currently at work.
+Farms, clay pits, potters, granaries, markets and hunting lodges therefore have explicit staffing requirements. Workers remain members of their home residence while employed and their commute contributes road traffic. When four homes merge, existing workers are reassigned to the merged residence identity without ceasing to be employed. The inspector reports assigned staff, workplace capacity and how many staff are currently at work.
 
 Hunters retain a specialist extension of the generic cycle:
 
@@ -174,7 +188,8 @@ Current implementation includes a generic `GoodsAgent` used by food, clay and po
 - the goods agent travels the actual road network to a staffed potter;
 - potters consume clay and create finite pottery stock only while their worker is at work;
 - pottery physically travels from potter to a staffed market;
-- pottery physically travels from market to a household;
+- pottery physically travels from market to a household/residence;
+- merged residences share one pottery inventory and delivery target;
 - household pottery stock is consumed over time;
 - pottery gates the first goods-dependent housing level;
 - all logistics carts contribute road traffic while travelling.
@@ -183,7 +198,7 @@ Current implementation includes a generic `GoodsAgent` used by food, clay and po
 
 A first bootstrap desirability score exists so housing diagnostics can distinguish pleasant and industrial neighbourhoods.
 
-Current influences are intentionally simple/original and are not a copy of Pharaoh values. Water/reeds, wells and markets can help; clay pits, potters, hunting lodges and granaries can reduce nearby desirability. This is a foundation for later overlays and housing requirements, not final balancing.
+Current influences are intentionally simple/original and are not a copy of Pharaoh values. Water/reeds, wells and markets can help; clay pits, potters, hunting lodges and granaries can reduce nearby desirability. A merged residence evaluates desirability across its footprint rather than trusting one arbitrary member tile. This is a foundation for later overlays and housing requirements, not final balancing.
 
 ## Calendar and simulation speed
 
@@ -230,13 +245,16 @@ Implemented and tested in the headless world model:
 - physical clay/pottery logistics agents;
 - household pottery stock and pottery-gated housing evolution;
 - well service and housing evolution/capacity;
+- authoritative 2x2 residence identity with shared population, employment, household stock and services;
+- migration, workers and deliveries retargeted safely when houses merge;
+- whole-footprint demolition semantics for merged housing;
 - persistent road traffic/evolution state;
-- house evolution diagnostics;
+- house/residence evolution diagnostics;
 - workplace staffing diagnostics;
 - bootstrap desirability;
 - simulation calendar;
 - Common 1.16.0 fixed-step integration at application level;
-- Linux CI building and running the world smoke test.
+- Linux CI building and running the world smoke test, including authoritative residence-merge assertions.
 
 Implemented in presentation:
 
@@ -248,7 +266,9 @@ Implemented in presentation:
 - visible immigrants, role-coloured workers and food/clay/pottery carts;
 - workers visibly change from civilian clothing into role-readable work clothing;
 - road appearance changes from measured traffic;
-- expanded residence/road/workplace inspector with real staffing state;
+- merged 2x2 residence rendering is now driven by the authoritative simulation residence identity rather than a renderer-side neighbour heuristic;
+- merged Courtyard Compounds get a distinct compound/courtyard presentation;
+- expanded residence/road/workplace inspector with shared merged-residence state and real staffing state;
 - month/year HUD plus pause/x1/x2/x4 controls;
 - whole-map minimap with click navigation and approximate viewport;
 - moving cloud shadows and animated water detail;
@@ -266,12 +286,12 @@ Implemented in presentation:
 ## High-priority simulation gaps
 
 1. Scale labour demand and production throughput beyond the current one-worker bootstrap values, including explicit understaffing effects.
-2. Make 2x2 housing merge a genuine multi-tile residence identity rather than only a visual merge.
-3. Replace abstract hunting targets with real wildlife agents.
-4. Add causal supply tracing to the inspector: house ← market ← storage ← producer and the responsible workers/carts.
-5. Add fair demand scheduling and player-controlled distribution policies as the city grows beyond the bootstrap district.
-6. Add reeds → papyrus as the second manufacturing chain.
-7. Begin Nile inundation/agricultural-cycle simulation after the basic logistics slice is physically coherent.
+2. Replace abstract hunting targets with real wildlife agents.
+3. Add causal supply tracing to the inspector: residence ← market ← storage ← producer and the responsible workers/carts.
+4. Add fair demand scheduling and player-controlled distribution policies as the city grows beyond the bootstrap district.
+5. Add reeds → papyrus as the second manufacturing chain.
+6. Begin Nile inundation/agricultural-cycle simulation after the basic logistics slice is physically coherent.
+7. Extend residence identity beyond the first 2x2 merge tier only when later housing forms require it; do not return to renderer-only merge heuristics.
 
 ## Guardrail
 
