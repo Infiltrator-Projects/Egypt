@@ -6,19 +6,34 @@ on:
   pull_request:
 
 jobs:
-  linux-build-test:
+  core-no-window-system:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install X11 development headers
+      - name: Configure without host backend
+        run: cmake -S . -B build-core -DCMAKE_BUILD_TYPE=Release -DEGYPT_HOST_BACKEND=none
+
+      - name: Build platform-neutral game core
+        run: cmake --build build-core --target egypt-game-core-compile egypt-world-smoke --parallel
+
+      - name: Test platform-neutral core
+        run: ctest --test-dir build-core --output-on-failure
+
+  linux-x11-host-adapter:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install X11 host-adapter headers
         run: |
           sudo apt-get update
           sudo apt-get install -y libx11-dev
 
-      - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Configure X11 host adapter
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DEGYPT_HOST_BACKEND=x11
 
       - name: Build
         run: cmake --build build --parallel
