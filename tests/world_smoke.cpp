@@ -35,8 +35,15 @@ int main() {
     if (!world.place(Structure::Market, 30, 12)) fail("market placement failed");
     if (!world.place(Structure::House, 30, 13)) fail("fed house placement failed");
 
-    for (int i = 0; i < 16; ++i) world.tick();
-    if (world.tile(30, 13).food_stock == 0) fail("food did not reach house");
+    bool saw_food_cart = false;
+    for (int i = 0; i < 30; ++i) {
+        world.tick();
+        for (const auto& goods : world.goods_agents()) {
+            if (goods.resource == Resource::Food) saw_food_cart = true;
+        }
+    }
+    if (!saw_food_cart) fail("food never moved as a physical logistics agent");
+    if (world.tile(30, 13).food_stock == 0) fail("food did not physically reach house");
     if (world.tile(30, 13).population != 0) fail("people appeared without kingdom road");
 
     for (int x = 0; x <= 28; ++x) {
