@@ -248,12 +248,142 @@ void World::feed_houses() {
                 continue;
             }
 
-            if (house.food_stock > 0) {
-                if ((ticks_ % 2U) == 0U && house.population < 8) ++house.population;
-            } else if ((ticks_ % 2U) == 0U && house.population > 0) {
+            if (house.food_stock == 0 && (ticks_ % 2U) == 0U && house.population > 0) {
                 --house.population;
             }
         }
+    }
+}
+
+std::vector<std::size_t> World::immigration_path_to(int house_x, int house_y) const {
+    const auto goals = adjacent_roads(house_x, house_y);
+    if (goals.empty()) return {};
+
+    std::vector<int> previous(tiles_.size(), -1);
+    std::vector<std::uint8_t> seen(tiles_.size(), 0);
+    std::queue<std::size_t> q;
+
+    for (const auto goal : goals) {
+        seen[goal] = 1;
+        q.push(goal);
+    }
+
+    static constexpr int dx[4] = {1, -1, 0, 0};
+    static constexpr int dy[4] = {0, 0, 1, -1};
+    std::size_t entrance = tiles_.size();
+
+    while (!q.empty()) {
+        const std::size_t current = q.front();
+        q.pop();
+        const int x = static_cast<int>(current % kWidth);
+        const int y = static_cast<int>(current / kWidth);
+        if (x == 0 || y == 0 || x == kWidth - 1 || y == kHeight - 1) {
+            entrance = current;
+            break;
+        }
+
+        for (int i = 0; i < 4; ++i) {
+            const int nx = x + dx[i];
+            const int ny = y + dy[i];
+            if (!in_bounds(nx, ny)) continue;
+            const std::size_t ni = index(nx, ny);
+            if (seen[ni] || tile(nx, ny).structure != Structure::Road) continue;
+            seen[ni] = 1;
+            previous[ni] = static_cast<int>(current);
+            q.push(ni);
+        }
+    }
+
+    if (entrance == tiles_.size()) return {};
+
+    std::vector<std::size_t> path;
+    std::size_t current = entrance;
+    path.push_back(current);
+    while (previous[current] >= 0) {
+        current = static_cast<std::size_t>(previous[current]);
+        path.push_back(current);
+    }
+    return path;
+}
+
+int World::pending_immigrants_for(int house_x, int house_y) const {
+    int pending = 0;
+    for (const auto& immigrant : immigrants_) {
+        if (immigrant.target_x == house_x && immigrant.target_y == house_y) {
+            pending += immigrant.group_size;
+        }
+    }
+    return pending;
+}
+
+void World::create_immigration() {
+    if ((ticks_ % 2U) != 0U || immigrants_.size() >= 24U) return;
+
+    int groups_created = 0;
+    for (int hy = 0; hy < kHeight && groups_created < 3; ++hy) {
+        for (int hx = 0; hx < kWidth && groups_created < 3; ++hx) {
+            const Tile& house = tile(hx, hy);
+            if (house.structure != Structure::House || house.food_stock == 0 || !has_road_access(hx, hy)) continue;
+
+            const int pending = pending_immigrants_for(hx, hy);
+            const int vacancies = 8 - static_cast<int>(house.population) - pending;
+            if (vacancies <= 0) continue;
+
+            auto path = immigration_path_to(hx, hy);
+            if (path.empty()) continue;
+
+            const int group = std::min(3, vacancies);
+            const std::size_t start = path.front();
+            ImmigrantAgent immigrant;
+            immigrant.x = static_cast<int>(start % kWidth);
+            immigrant.y = static_cast<int>(start / kWidth);
+            immigrant.target_x = hx;
+            immigrant.target_y = hy;
+            immigrant.group_size = static_cast<std::uint8_t>(group);
+            immigrant.road_path = std::move(path);
+            immigrant.path_position = 0;
+            immigrants_.push_back(std::move(immigrant));
+            ++groups_created;
+        }
+    }
+}
+
+void World::move_immigrants() {
+    for (std::size_t i = 0; i < immigrants_.size();) {
+        ImmigrantAgent& immigrant = immigrants_[i];
+        bool remove = false;
+
+        if (!in_bounds(immigrant.target_x, immigrant.target_y)) {
+            remove = true;
+        } else {
+            Tile& house = tile(immigrant.target_x, immigrant.target_y);
+            if (house.structure != Structure::House || house.food_stock == 0 || !has_road_access(immigrant.target_x, immigrant.target_y)) {
+                remove = true;
+            }
+        }
+
+        if (!remove && immigrant.path_position + 1 < immigrant.road_path.size()) {
+            const std::size_t next = immigrant.road_path[immigrant.path_position + 1];
+            const int nx = static_cast<int>(next % kWidth);
+            const int ny = static_cast<int>(next / kWidth);
+            if (tile(nx, ny).structure != Structure::Road) {
+                remove = true;
+            } else {
+                ++immigrant.path_position;
+                immigrant.x = nx;
+                immigrant.y = ny;
+            }
+        } else if (!remove) {
+            Tile& house = tile(immigrant.target_x, immigrant.target_y);
+            const int space = 8 - static_cast<int>(house.population);
+            if (space > 0) {
+                house.population = static_cast<std::uint8_t>(house.population + std::min<int>(space, immigrant.group_size));
+            }
+            remove = true;
+        }
+
+        if (remove) immigrants_.erase(immigrants_.begin() + static_cast<std::ptrdiff_t>(i));
+        else ++i;
     }
 }
 
@@ -263,6 +393,8 @@ void World::tick() {
     move_food_to_granaries();
     move_food_to_markets();
     feed_houses();
+    create_immigration();
+    move_immigrants();
 }
 
 int World::population() const {
@@ -275,6 +407,12 @@ int World::total_food() const {
     int food = 0;
     for (const Tile& t : tiles_) food += t.food_stock;
     return food;
+}
+
+int World::immigrants_in_transit() const {
+    int count = 0;
+    for (const auto& immigrant : immigrants_) count += immigrant.group_size;
+    return count;
 }
 
 const char* World::terrain_name(Terrain t) {
