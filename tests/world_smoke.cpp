@@ -74,6 +74,18 @@ int main() {
     if (!camera.pick(screen.x, screen.y, picked_x, picked_y)) fail("isometric pick failed");
     if (picked_x != tx || picked_y != ty) fail("isometric projection/pick round-trip failed");
 
+    // Lock the Pharaoh-style handedness: +X goes down-left and +Y goes
+    // down-right. This prevents an accidental horizontal mirror regression.
+    const IsoPoint origin = camera.project(10, 10);
+    const IsoPoint plus_x = camera.project(11, 10);
+    const IsoPoint plus_y = camera.project(10, 11);
+    if (!(plus_x.x < origin.x && plus_x.y > origin.y)) {
+        fail("map +X must project down-left");
+    }
+    if (!(plus_y.x > origin.x && plus_y.y > origin.y)) {
+        fail("map +Y must project down-right");
+    }
+
     std::cout << "Egypt world smoke test: OK\n";
     return 0;
 }
