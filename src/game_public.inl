@@ -1,6 +1,7 @@
 public:
     explicit Game(Framebuffer& fb)
         : fb_(fb), menu_(common::load_e16("build/assets/menu.e16")), view_w_(fb.width()), view_h_(fb.height()) {
+        world_.lay_initial_kingdom_road();
         if (!menu_.valid()) std::cerr << "Egypt: menu artwork failed to load\n";
     }
 
