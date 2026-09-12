@@ -19,7 +19,7 @@ Initial implementation direction:
 - C++20;
 - our own application/game loop;
 - our own framebuffer renderer;
-- our own drawing primitives and UI;
+- asset-driven graphical presentation and UI composited into the framebuffer;
 - our own input/state handling;
 - our own world and simulation model;
 - native desktop platform integration;
@@ -134,3 +134,46 @@ Build rules enforce this boundary:
 - CI has a dedicated no-window-system job so platform APIs leaking back into game code break the build immediately.
 
 A future Linux fullscreen/direct-display adapter may use DRM/KMS and input devices directly; Windows can use its own native adapter. Those choices must remain implementation details outside the game core.
+
+## TD-009 — Everything visible is graphics in the game framebuffer
+
+**Date:** 2026-09-12
+
+**Status:** DECIDED / AUTHORITATIVE
+
+Egypt is a pixel-graphics game. Everything the player sees must ultimately be graphical pixels composed by the game into its own framebuffer. The presentation model is deliberately closer to classic Amiga-style graphics programming than to a text-oriented desktop application or DOS-style control interface.
+
+The game composes a complete frame in memory. Terrain, buildings, citizens, effects, HUD panels, buttons, icons, numbers, labels, dates and all other visible elements are drawn or blitted into that frame. The platform/host layer's job is only to present the completed pixel buffer and provide input/events. It must not be responsible for drawing player-facing UI or text.
+
+Normal rendering should use a front/back-buffer style model: while one completed image is being presented, the game prepares the next complete image in another buffer or equivalent presentation surface, then presents/swaps the completed frame. The exact host implementation may differ by platform, but that must not alter the game's all-pixel presentation model.
+
+### Text is graphics
+
+There is no separate visual "text mode" in Egypt. Player-visible text is graphical artwork.
+
+- A letter, digit or punctuation mark is a glyph image/sprite/bitmap asset.
+- Drawing `JAN 3500 BC`, population totals or a menu label means compositing graphical glyphs into the framebuffer.
+- The operating system's text widgets, terminal rendering, desktop fonts or native controls are not part of the game's visual presentation.
+- Typography may originate from a designed typeface during asset production, but the runtime result used by the game is graphical glyph artwork/atlas data rendered as pixels.
+- Text must visually belong to the artwork around it rather than look like console, terminal, system-widget or enlarged 5×7 bitmap output.
+
+### UI is artwork, not programmer primitives
+
+Production player-facing UI must be asset-driven artwork rather than a collection of primitive rectangles, lines and triangles pretending to be finished graphics.
+
+Examples include:
+
+- HUD bars and frames as authored graphical assets;
+- speed controls as graphical button/medallion sprites with state variants;
+- icons as authored graphical sprites;
+- date plaques, menu plaques, inspector frames and decorative borders as graphical assets;
+- graphical glyph atlases for labels and changing numerical values;
+- state changes implemented by selecting/compositing the appropriate graphical asset, not by falling back to native widgets or text-mode styling.
+
+Framebuffer primitives remain useful internally for rasterisation, masks, selection outlines, diagnostics, placement previews and temporary development scaffolding. They are not the target visual language for finished player-facing HUD artwork.
+
+### Visual prohibition
+
+The normal game must not drift toward a CLI, terminal, DOS utility, native desktop form or debug-tool appearance. In particular, large scaled 5×7 bitmap lettering, generic outlined rectangular buttons, system-looking controls and procedurally assembled pseudo-ornament are not acceptable substitutes for final graphical assets.
+
+When the Pharaoh/reference material clearly shows an element as illustrated UI artwork, Egypt should treat that evidence as authoritative for the presentation approach: build an original graphical asset serving the same visual/function role rather than approximating it with text and geometric primitives.
