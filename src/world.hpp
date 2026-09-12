@@ -22,8 +22,18 @@ enum class Structure : std::uint8_t {
 
 enum class Resource : std::uint8_t { Food, Clay, Pottery };
 
+enum class WorkerRole : std::uint8_t {
+    Hunter,
+    Farmer,
+    ClayWorker,
+    Potter,
+    GranaryWorker,
+    MarketWorker
+};
+
 enum class WorkerState : std::uint8_t {
     CommutingToJob,
+    WorkingAtJob,
     HunterOutbound,
     Hunting,
     HunterReturning,
@@ -62,6 +72,7 @@ struct WorkerAgent {
     int home_y = 0;
     int job_x = 0;
     int job_y = 0;
+    WorkerRole role = WorkerRole::Hunter;
     WorkerState state = WorkerState::CommutingToJob;
     std::vector<std::size_t> path;
     std::size_t path_position = 0;
@@ -106,6 +117,9 @@ public:
     [[nodiscard]] int house_desirability(int x, int y) const;
     [[nodiscard]] int road_level(int x, int y) const;
     [[nodiscard]] const char* house_evolution_status(int x, int y) const;
+    [[nodiscard]] int workers_assigned(int x, int y) const;
+    [[nodiscard]] int workers_active(int x, int y) const;
+    [[nodiscard]] int worker_capacity(int x, int y) const;
     [[nodiscard]] int population() const;
     [[nodiscard]] int employed_population() const;
     [[nodiscard]] int total_food() const;
@@ -125,6 +139,7 @@ public:
     [[nodiscard]] static const char* terrain_name(Terrain terrain);
     [[nodiscard]] static const char* structure_name(Structure structure);
     [[nodiscard]] static const char* worker_state_name(WorkerState state);
+    [[nodiscard]] static const char* worker_role_name(WorkerRole role);
     [[nodiscard]] static const char* resource_name(Resource resource);
     [[nodiscard]] static const char* housing_name(std::uint8_t level);
     [[nodiscard]] static const char* road_level_name(int level);
@@ -144,9 +159,12 @@ private:
     [[nodiscard]] std::vector<std::size_t> immigration_path_to(int house_x, int house_y) const;
     [[nodiscard]] int pending_immigrants_for(int house_x, int house_y) const;
     [[nodiscard]] int assigned_workers_for_job(int job_x, int job_y) const;
+    [[nodiscard]] int active_workers_for_job(int job_x, int job_y) const;
+    [[nodiscard]] int desired_workers_for(Structure structure) const;
+    [[nodiscard]] WorkerRole role_for(Structure structure) const;
+    [[nodiscard]] bool is_workplace(Structure structure) const;
     [[nodiscard]] std::vector<std::size_t> hunting_path_from(int job_x, int job_y) const;
     [[nodiscard]] int pending_goods_for(int target_x, int target_y, Resource resource) const;
-    [[nodiscard]] bool has_pending_delivery(int target_x, int target_y, Resource resource) const;
 
     void generate();
     void produce_food();
@@ -161,6 +179,7 @@ private:
     void recruit_workers();
     void move_workers();
     void release_worker(const WorkerAgent& worker);
+    void start_commute_home(WorkerAgent& worker);
     void queue_goods_deliveries();
     void move_goods();
     void consume_household_goods();
