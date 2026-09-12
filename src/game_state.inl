@@ -108,7 +108,9 @@ private:
     }
 
     std::array<Rect,4> speed_rects() const {
-        return {Rect{12,16,66,34},Rect{84,16,54,34},Rect{144,16,54,34},Rect{204,16,54,34}};
+        // Compact top-left medallions matching the reference game's HUD grammar:
+        // pause, play, faster, fastest.  Speed itself is shown separately.
+        return {Rect{10,9,28,28},Rect{43,9,28,28},Rect{76,9,28,28},Rect{109,9,28,28}};
     }
 
     bool over_game_ui(int x, int y) const {
