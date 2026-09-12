@@ -3,6 +3,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <string>
 
 namespace {
 [[noreturn]] void fail(const char* message) {
@@ -35,6 +36,7 @@ int main() {
     for (int i = 0; i < 16; ++i) world.tick();
     if (world.tile(30, 13).food_stock == 0) fail("food did not reach house");
     if (world.tile(30, 13).population != 0) fail("people appeared without kingdom road");
+    if (std::string(world.house_evolution_status(30, 13)).find("WELL") == std::string::npos) fail("house diagnostics did not identify missing well");
 
     for (int x = 0; x <= 28; ++x) {
         if (!world.place(Structure::Road, x, 11)) fail("kingdom road placement failed");
@@ -53,6 +55,12 @@ int main() {
     if (!saw_immigrants) fail("no visible immigrant traffic");
     if (!saw_population) fail("immigrants never reached house");
 
+    bool road_recorded_usage = false;
+    for (int y = 0; y < World::kHeight; ++y) for (int x = 0; x < World::kWidth; ++x) {
+        if (world.tile(x, y).structure == Structure::Road && world.tile(x, y).road_traffic > 0) road_recorded_usage = true;
+    }
+    if (!road_recorded_usage) fail("moving immigrants did not record road traffic");
+
     const int base_capacity = world.house_capacity(30, 13);
     if (base_capacity != 8) fail("base house capacity must be 8");
     if (!world.place(Structure::Well, 28, 14)) fail("well placement failed");
@@ -65,15 +73,11 @@ int main() {
     bool saw_worker = false;
     bool saw_hunter_role = false;
     bool saw_hunting_food = false;
-    for (int i = 0; i < 100; ++i) {
+    for (int i = 0; i < 120; ++i) {
         world.tick();
         if (!world.workers().empty()) saw_worker = true;
         for (const auto& worker : world.workers()) {
-            if (worker.state == WorkerState::HunterOutbound ||
-                worker.state == WorkerState::Hunting ||
-                worker.state == WorkerState::HunterReturning) {
-                saw_hunter_role = true;
-            }
+            if (worker.state == WorkerState::HunterOutbound || worker.state == WorkerState::Hunting || worker.state == WorkerState::HunterReturning) saw_hunter_role = true;
         }
         if (world.tile(28, 12).food_stock > 0) saw_hunting_food = true;
     }
@@ -81,6 +85,12 @@ int main() {
     if (!saw_hunter_role) fail("worker never became a hunter");
     if (!saw_hunting_food && world.total_food() == 0) fail("hunting produced no food");
     if (world.employed_population() == 0) fail("employment was not tied to residents");
+
+    bool saw_evolved_road = false;
+    for (int y = 0; y < World::kHeight; ++y) for (int x = 0; x < World::kWidth; ++x) {
+        if (world.road_level(x, y) >= 1) saw_evolved_road = true;
+    }
+    if (!saw_evolved_road) fail("repeated traffic never evolved a road");
 
     IsoCamera camera;
     const IsoPoint origin = camera.project(0, 0);
