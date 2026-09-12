@@ -21,6 +21,7 @@ private:
     int view_w_ = 0, view_h_ = 0;
     int requested_w_ = 1280, requested_h_ = 720, resolution_index_ = 0;
     int simulation_speed_ = 1;
+    std::uint64_t simulation_subtick_ = 0;
     double scroll_speed_px_ = 620.0;
     double atmosphere_time_ = 0.0;
     double atmosphere_redraw_ = 0.0;
