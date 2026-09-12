@@ -82,7 +82,20 @@ int main() {
         if (world.tile(30, 13).population > bootstrap_population) population_grew = true;
     }
     if (!world.has_well_service(30, 13)) fail("well did not serve house");
-    if (!housing_evolved) fail("house did not evolve with sustained food and water");
+    if (!housing_evolved) {
+        const Tile& h = world.tile(30, 13);
+        std::cerr << "housing debug: level=" << int(h.housing_level)
+                  << " service_ticks=" << int(h.housing_service_ticks)
+                  << " food=" << h.food_stock
+                  << " pop=" << int(h.population)
+                  << " employed=" << int(h.employed)
+                  << " total_food=" << world.total_food()
+                  << " farm=" << world.workers_assigned(28,10) << "/" << world.workers_active(28,10)
+                  << " granary=" << world.workers_assigned(30,11) << "/" << world.workers_active(30,11)
+                  << " market=" << world.workers_assigned(30,12) << "/" << world.workers_active(30,12)
+                  << " status=" << world.house_evolution_status(30,13) << '\n';
+        fail("house did not evolve with sustained food and water");
+    }
     if (world.house_capacity(30, 13) <= base_capacity) fail("housing evolution did not raise capacity");
     if (!population_grew) fail("new housing capacity did not attract more settlers");
 
