@@ -13,6 +13,10 @@ private:
     bool resize_pending_ = false;
     bool paused_ = false;
     bool flat_mode_ = false;
+    bool pan_left_ = false;
+    bool pan_right_ = false;
+    bool pan_up_ = false;
+    bool pan_down_ = false;
     unsigned drag_button_ = 0;
     int mx_ = 0, my_ = 0;
     int hover_x_ = -1, hover_y_ = -1;
@@ -22,7 +26,9 @@ private:
     int requested_w_ = 1280, requested_h_ = 720, resolution_index_ = 0;
     int simulation_speed_ = 1;
     std::uint64_t simulation_subtick_ = 0;
-    double scroll_speed_px_ = 620.0;
+    double scroll_speed_px_ = 900.0;
+    double pan_fraction_x_ = 0.0;
+    double pan_fraction_y_ = 0.0;
     double atmosphere_time_ = 0.0;
     double atmosphere_redraw_ = 0.0;
     std::string status_ = "PRE-ALPHA - NATIVE ENGINE";
@@ -32,12 +38,35 @@ private:
 
     void zoom_by(int delta) { cam_.zoom_percent = std::clamp(cam_.zoom_percent + delta, 50, 180); }
 
+    void set_pan_key(KeySym key, bool down) {
+        if (key == XK_Left || key == XK_a || key == XK_A) pan_left_ = down;
+        else if (key == XK_Right || key == XK_d || key == XK_D) pan_right_ = down;
+        else if (key == XK_Up || key == XK_w || key == XK_W) pan_up_ = down;
+        else if (key == XK_Down || key == XK_s || key == XK_S) pan_down_ = down;
+    }
+
+    void apply_camera_motion(double dx, double dy) {
+        pan_fraction_x_ += dx;
+        pan_fraction_y_ += dy;
+        const int ix = static_cast<int>(std::trunc(pan_fraction_x_));
+        const int iy = static_cast<int>(std::trunc(pan_fraction_y_));
+        if (ix == 0 && iy == 0) return;
+        cam_.pan_x += ix;
+        cam_.pan_y += iy;
+        pan_fraction_x_ -= ix;
+        pan_fraction_y_ -= iy;
+        update_hover();
+        dirty_ = true;
+    }
+
     void reset_camera() {
         cam_.origin_x = fb_.width() / 2 + 80;
         cam_.origin_y = 150;
         cam_.pan_x = -260;
         cam_.pan_y = -30;
         cam_.zoom_percent = 90;
+        pan_fraction_x_ = 0.0;
+        pan_fraction_y_ = 0.0;
         update_hover();
     }
 
@@ -45,6 +74,8 @@ private:
         const IsoPoint p = cam_.project(tx, ty);
         cam_.pan_x += fb_.width() / 2 - p.x;
         cam_.pan_y += fb_.height() / 2 - p.y;
+        pan_fraction_x_ = 0.0;
+        pan_fraction_y_ = 0.0;
         update_hover();
     }
 
