@@ -22,14 +22,24 @@
             text(fb_,info.x+14,info.y+78,World::road_level_name(world_.road_level(selected_x_,selected_y_)),gold,3);
             text(fb_,info.x+14,info.y+116,"RECORDED TRAFFIC "+std::to_string(tile.road_traffic),pale,2);
             text(fb_,info.x+14,info.y+146,"REAL WALKERS AND CARTS IMPROVE THIS ROUTE",pale,1);
-        }else if(tile.structure==Structure::ClayPit){
-            text(fb_,info.x+14,info.y+82,"CLAY STOCK "+std::to_string(tile.clay_stock),pale,2);
-        }else if(tile.structure==Structure::Potter){
-            text(fb_,info.x+14,info.y+82,"CLAY "+std::to_string(tile.clay_stock)+"   POTTERY "+std::to_string(tile.pottery_stock),pale,2);
-        }else if(tile.structure==Structure::Market){
-            text(fb_,info.x+14,info.y+82,"FOOD "+std::to_string(tile.food_stock)+"   POTTERY "+std::to_string(tile.pottery_stock),pale,2);
-        }else if(tile.structure==Structure::Farm||tile.structure==Structure::Granary||tile.structure==Structure::HuntingLodge){
-            text(fb_,info.x+14,info.y+82,"FOOD STOCK "+std::to_string(tile.food_stock),pale,2);
+        }else if(world_.worker_capacity(selected_x_,selected_y_)>0){
+            const int assigned=world_.workers_assigned(selected_x_,selected_y_);
+            const int active=world_.workers_active(selected_x_,selected_y_);
+            const int capacity=world_.worker_capacity(selected_x_,selected_y_);
+            text(fb_,info.x+14,info.y+66,"STAFF "+std::to_string(assigned)+" / "+std::to_string(capacity)+"   AT WORK "+std::to_string(active),gold,2);
+            if(assigned==0)text(fb_,info.x+14,info.y+92,"WAITING FOR RESIDENT LABOUR",{226,143,91},2);
+            else if(active==0)text(fb_,info.x+14,info.y+92,"STAFF ARE COMMUTING OR AT HOME",pale,1);
+            else text(fb_,info.x+14,info.y+92,"PRODUCTION OR DISTRIBUTION ACTIVE",{152,205,126},1);
+            if(tile.structure==Structure::ClayPit){
+                text(fb_,info.x+14,info.y+122,"CLAY STOCK "+std::to_string(tile.clay_stock),pale,2);
+            }else if(tile.structure==Structure::Potter){
+                text(fb_,info.x+14,info.y+122,"CLAY "+std::to_string(tile.clay_stock)+"   POTTERY "+std::to_string(tile.pottery_stock),pale,2);
+            }else if(tile.structure==Structure::Market){
+                text(fb_,info.x+14,info.y+122,"FOOD "+std::to_string(tile.food_stock)+"   POTTERY "+std::to_string(tile.pottery_stock),pale,2);
+            }else if(tile.structure==Structure::Farm||tile.structure==Structure::Granary||tile.structure==Structure::HuntingLodge){
+                text(fb_,info.x+14,info.y+122,"FOOD STOCK "+std::to_string(tile.food_stock),pale,2);
+            }
+            text(fb_,info.x+14,info.y+154,"THIS BUILDING USES REAL HOUSEHOLD WORKERS",pale,1);
         }
     }
 
@@ -78,5 +88,5 @@
         const auto tools=tool_buttons();
         const char* labels[11]={"INSPECT","ROAD","HOUSE","FARM","GRANARY","MARKET","WELL","HUNT LODGE","CLAY PIT","POTTER","BULLDOZE"};
         for(int i=0;i<11;++i)button(tools[i],labels[i],true,static_cast<int>(tool_)==i);
-        text(fb_,220,fb_.height()-116,"F FLAT VIEW  SPACE PAUSE  VISIBLE GOODS USE REAL ROADS",pale,1);
+        text(fb_,220,fb_.height()-116,"F FLAT VIEW  SPACE PAUSE  JOBS USE REAL RESIDENT LABOUR",pale,1);
     }
