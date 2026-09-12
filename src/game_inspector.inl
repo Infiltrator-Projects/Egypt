@@ -70,6 +70,51 @@
         }
     }
 
+    void fill_hud_disc(int cx,int cy,int radius,Color color) {
+        for(int yy=-radius;yy<=radius;++yy){
+            const int xx=static_cast<int>(std::sqrt(std::max(0,radius*radius-yy*yy)));
+            fb_.fill_span(cy+yy,cx-xx,cx+xx,color);
+        }
+    }
+
+    void draw_speed_medallion(Rect r,int arrows,bool pause_icon,bool active) {
+        const int cx=r.x+r.w/2;
+        const int cy=r.y+r.h/2;
+        const int radius=std::min(r.w,r.h)/2;
+        const Color rim=active?Color{238,202,126}:Color{155,108,59};
+        const Color face=active?Color{83,48,29}:Color{53,31,23};
+        fill_hud_disc(cx,cy,radius,rim);
+        fill_hud_disc(cx,cy,radius-2,face);
+        fill_hud_disc(cx,cy,radius-5,{67,39,27});
+        if(pause_icon){
+            fb_.fill_rect({cx-5,cy-6,3,12},pale);
+            fb_.fill_rect({cx+2,cy-6,3,12},pale);
+            return;
+        }
+        const int count=std::clamp(arrows,1,3);
+        const int tri_w=6;
+        const int gap=1;
+        const int total=count*tri_w+(count-1)*gap;
+        int sx=cx-total/2;
+        for(int i=0;i<count;++i){
+            fb_.triangle(sx,cy-6,sx,cy+6,sx+tri_w,cy,pale);
+            sx+=tri_w+gap;
+        }
+    }
+
+    void draw_speed_controls() {
+        // Compact sculpted control cluster like the reference HUD rather than
+        // generic rectangular debug buttons.
+        fb_.fill_rect({0,0,178,46},{69,39,26});
+        fb_.fill_rect({0,44,178,2},{116,73,39});
+        const auto sr=speed_rects();
+        draw_speed_medallion(sr[0],0,true,paused_);
+        draw_speed_medallion(sr[1],1,false,!paused_&&simulation_speed_==1);
+        draw_speed_medallion(sr[2],2,false,!paused_&&simulation_speed_==2);
+        draw_speed_medallion(sr[3],3,false,!paused_&&simulation_speed_==4);
+        text(fb_,145,17,"X"+std::to_string(simulation_speed_),pale,1);
+    }
+
     void draw_game() {
         // World first.  UI is an overlay and must never be overwritten by the
         // isometric map (the old order produced the visible sawtooth HUD edge).
@@ -125,11 +170,7 @@
         // HUD and controls are deliberately last so the world can never cut
         // sawteeth, triangles or other map geometry through interface panels.
         fb_.fill_rect({0,0,fb_.width(),78},panel);
-        const auto sr=speed_rects();
-        button(sr[0],paused_?"PLAY":"PAUSE",true,paused_,1);
-        button(sr[1],"X1",true,!paused_&&simulation_speed_==1,2);
-        button(sr[2],"X2",true,!paused_&&simulation_speed_==2,2);
-        button(sr[3],"X4",true,!paused_&&simulation_speed_==4,2);
+        draw_speed_controls();
 
         const std::string date=std::string(world_.month_name())+" "+std::to_string(world_.year_bc())+" BC";
         text(fb_,fb_.width()/2-70,12,date,gold,3);
