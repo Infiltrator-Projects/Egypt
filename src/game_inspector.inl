@@ -1,9 +1,11 @@
     void draw_inspector() {
+        // An inspector is a contextual graphical overlay, not a permanent
+        // desktop-style empty window.  With no selected tile the city remains
+        // visually unobstructed.
+        if(!world_.in_bounds(selected_x_,selected_y_)) return;
+
         const Rect info{fb_.width()-520,88,502,236};
         fb_.blend_rect(info,{8,7,6},215);fb_.rect(info,gold,1);
-        if(!world_.in_bounds(selected_x_,selected_y_)){
-            text(fb_,info.x+14,info.y+48,"CLICK A TILE TO INSPECT",pale,2);return;
-        }
 
         int inspect_x=selected_x_,inspect_y=selected_y_;
         const Tile& selected=world_.tile(selected_x_,selected_y_);
@@ -122,14 +124,11 @@
             fb_.diamond_outline(p,tw,th,{255,230,130});
         }
 
-        // Reference-style top HUD is rendered last, above the world.
+        // Graphical screens are composited over the world last.  The default
+        // city view contains no empty desktop-style inspector window, no row of
+        // text buttons, and no debug sentence across the bottom.
         draw_top_hud();
-
         draw_minimap();
         draw_inspector();
-
-        const auto tools=tool_buttons();
-        const char* labels[11]={"INSPECT","ROAD","HOUSE","FARM","GRANARY","MARKET","WELL","HUNT LODGE","CLAY PIT","POTTER","BULLDOZE"};
-        for(int i=0;i<11;++i)button(tools[i],labels[i],true,static_cast<int>(tool_)==i);
-        text(fb_,220,fb_.height()-116,"F FLAT VIEW  SPACE PAUSE  JOBS USE REAL RESIDENT LABOUR",pale,1);
+        draw_tool_ribbon();
     }
