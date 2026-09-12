@@ -1,14 +1,27 @@
     void draw_cloud_shadows() {
-        const int span=fb_.width()+700;
-        const int x=static_cast<int>(std::fmod(atmosphere_time_*32.0,static_cast<double>(span)))-420;
+        const int span=fb_.width()+900;
+        const int x=static_cast<int>(std::fmod(atmosphere_time_*34.0,static_cast<double>(span)))-520;
         const int y=fb_.height()/3;
-        const Color shadow{44,46,39};
-        fb_.blend_rect({x,y,430,92},shadow,24);
-        fb_.blend_rect({x+80,y-44,320,72},shadow,18);
-        fb_.blend_rect({x+160,y+70,360,78},shadow,16);
-        const int x2=(x+fb_.width()/2+380)%span-350;
-        fb_.blend_rect({x2,y+160,360,82},shadow,16);
-        fb_.blend_rect({x2+90,y+128,260,62},shadow,12);
+        const Color shadow{43,47,40};
+        auto soft_blob=[&](int cx,int cy,int w,int h,std::uint8_t alpha){
+            const int bands=8;
+            for(int i=0;i<bands;++i){
+                const double t=(double(i)+0.5)/bands;
+                const double yy=(t*2.0-1.0);
+                const double profile=std::sqrt(std::max(0.0,1.0-yy*yy));
+                const int bw=std::max(4,static_cast<int>(w*profile));
+                const int bh=std::max(2,h/bands+2);
+                const int by=cy-h/2+i*h/bands;
+                const std::uint8_t a=static_cast<std::uint8_t>(alpha*(0.60+0.40*profile));
+                fb_.blend_rect({cx-bw/2,by,bw,bh},shadow,a);
+            }
+        };
+        soft_blob(x+210,y,430,105,24);
+        soft_blob(x+340,y-42,310,78,17);
+        soft_blob(x+390,y+58,340,82,15);
+        const int x2=(x+fb_.width()/2+560)%span-320;
+        soft_blob(x2,y+170,360,88,15);
+        soft_blob(x2+95,y+133,250,64,11);
     }
 
     void draw_minimap() {
