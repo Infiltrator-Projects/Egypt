@@ -82,6 +82,31 @@ private:
     Rect main_menu_rect() const { return {fb_.width() - 210, 18, 190, 42}; }
     Rect minimap_rect() const { return {12, std::max(84, fb_.height() - 230), 196, 116}; }
 
+    // The minimap is oriented in the same screen-space axes as the main
+    // isometric view.  Its horizontal axis is (map Y - map X) and its
+    // vertical axis is (map X + map Y).  Therefore W/S move the viewport
+    // marker vertically and A/D move it horizontally instead of diagonally.
+    std::array<double,2> minimap_normalized(double tx, double ty) const {
+        const double u = ty - tx;
+        const double v = tx + ty;
+        const double u_min = -double(World::kWidth - 1);
+        const double u_max = double(World::kHeight - 1);
+        const double v_max = double(World::kWidth + World::kHeight - 2);
+        return {
+            (u - u_min) / std::max(1.0, u_max - u_min),
+            v / std::max(1.0, v_max)
+        };
+    }
+
+    std::array<double,2> minimap_to_map(double nx, double ny) const {
+        const double u_min = -double(World::kWidth - 1);
+        const double u_max = double(World::kHeight - 1);
+        const double v_max = double(World::kWidth + World::kHeight - 2);
+        const double u = u_min + nx * (u_max - u_min);
+        const double v = ny * v_max;
+        return {(v - u) * 0.5, (v + u) * 0.5};
+    }
+
     std::array<Rect,4> speed_rects() const {
         return {Rect{12,16,66,34},Rect{84,16,54,34},Rect{144,16,54,34},Rect{204,16,54,34}};
     }
@@ -166,8 +191,11 @@ private:
 
         if (minimap_rect().contains(x, y)) {
             const Rect r = minimap_rect();
-            const int tx = std::clamp((x - r.x - 2) * World::kWidth / std::max(1, r.w - 4), 0, World::kWidth - 1);
-            const int ty = std::clamp((y - r.y - 2) * World::kHeight / std::max(1, r.h - 4), 0, World::kHeight - 1);
+            const double nx = std::clamp(double(x - (r.x + 2)) / std::max(1, r.w - 5), 0.0, 1.0);
+            const double ny = std::clamp(double(y - (r.y + 2)) / std::max(1, r.h - 5), 0.0, 1.0);
+            const auto map = minimap_to_map(nx, ny);
+            const int tx = std::clamp(static_cast<int>(std::lround(map[0])), 0, World::kWidth - 1);
+            const int ty = std::clamp(static_cast<int>(std::lround(map[1])), 0, World::kHeight - 1);
             center_camera_on(tx, ty);
             dirty_ = true;
             return;
