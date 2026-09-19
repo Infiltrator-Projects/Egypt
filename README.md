@@ -1,6 +1,6 @@
 # Egypt
 
-**Project copyright:** © 2000–2026 Shannon Smith
+**Project copyright:** © 2000-2026 Shannon Smith
 
 **Egypt** is an original Egyptian city-building and civilisation simulation inspired by the design strengths of *Pharaoh* (1999) and *Cleopatra: Queen of the Nile*, but built as a new game with its own simulation, systems, art, balance, scenarios and identity.
 
