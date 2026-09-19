@@ -6,7 +6,7 @@ The goal is not to clone *Pharaoh*. The goal is to preserve what made that style
 
 ## Engineering ethos
 
-What happens when an Egyptian city builder is rebuilt from the simulation outward instead of treating a 1990s game's mechanics as a specification? Egypt begins with the causes the player should be able to see: water, land, labour, movement, production, distribution, services, housing and monumental work.
+What happens when an Egyptian city builder is rebuilt from first principles, from the simulation outward, instead of treating a 1990s game's mechanics as a specification? Egypt begins with the causes the player should be able to see: water, land, labour, movement, production, distribution, services, housing and monumental work.
 
 *Pharaoh*, *Cleopatra*, historical research and other city builders are design evidence. They can reveal ideas worth preserving and weaknesses worth correcting, but this project owns its simulation, engine, renderer, rules, balance, art and identity. A familiar mechanic survives because it still produces the strongest result, not because the older game happened to implement it that way.
 
