@@ -5,16 +5,18 @@ CMAKE ?= cmake
 PYTHON ?= python3
 BUILD_DIR ?= build
 BUILD_TYPE ?= Release
+PREFIX ?= /usr/local
+BUILD_PROFILE ?= generic
 
 TARGET := $(BUILD_DIR)/egypt
 MENU_ASSET := $(BUILD_DIR)/assets/menu.e16
 MENU_PARTS := $(sort $(wildcard assets/menu_q20_xz_*.b64))
-MENU_SHA256 := e22ea3d3689495f83b6bd31437806ff897fff530f3d8420579f142bd3a1337c9
+MENU_BUILDER := tools/build_menu_asset.py
 HUD_STAMP := $(BUILD_DIR)/assets/.hud-art.stamp
 HUD_BUILDER := tools/build_hud_assets.py
 HUD_SOURCES := assets/hud_chrome_authored.e8p.b85 assets/hud_glyphs_authored.e8p.b85 assets/tool_icons_authored.e8p.b85
 
-.PHONY: all configure run clean menu-asset hud-assets
+.PHONY: all configure run clean menu-asset hud-assets native install-native deb
 
 all: configure
 	$(CMAKE) --build $(BUILD_DIR) --parallel
@@ -22,15 +24,9 @@ all: configure
 menu-asset: $(MENU_ASSET)
 hud-assets: $(HUD_STAMP)
 
-$(MENU_ASSET): $(MENU_PARTS)
+$(MENU_ASSET): $(MENU_PARTS) $(MENU_BUILDER)
 	@printf 'Preparing verified 640x360 Egypt menu artwork...\n'
-	@test "$$(printf '%s\n' $(MENU_PARTS) | wc -l)" = "29" || { echo 'Egypt menu payload is incomplete'; exit 1; }
-	@mkdir -p $(BUILD_DIR)/assets
-	@cat $(MENU_PARTS) | base64 -d | xz -dc > $(MENU_ASSET).tmp
-	@test "$$(stat -c%s $(MENU_ASSET).tmp)" = "35948" || { echo 'Egypt menu asset has the wrong size'; rm -f $(MENU_ASSET).tmp; exit 1; }
-	@test "$$(head -c 4 $(MENU_ASSET).tmp)" = "EJ8A" || { echo 'Egypt menu asset has the wrong signature'; rm -f $(MENU_ASSET).tmp; exit 1; }
-	@echo "$(MENU_SHA256)  $(MENU_ASSET).tmp" | sha256sum -c -
-	@mv $(MENU_ASSET).tmp $(MENU_ASSET)
+	@$(PYTHON) $(MENU_BUILDER) $(MENU_ASSET)
 
 $(HUD_STAMP): $(HUD_BUILDER) $(HUD_SOURCES)
 	@printf 'Installing authored Egypt HUD artwork...\n'
@@ -42,11 +38,23 @@ $(HUD_STAMP): $(HUD_BUILDER) $(HUD_SOURCES)
 	@touch $(HUD_STAMP)
 
 configure: $(MENU_ASSET) $(HUD_STAMP)
-	$(CMAKE) -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE)
+	$(CMAKE) -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) \
+		-DEGYPT_BUILD_PROFILE=$(BUILD_PROFILE) -DCMAKE_INSTALL_PREFIX=$(PREFIX)
 
 run: all
 	./$(TARGET)
 
+native:
+	$(MAKE) BUILD_DIR=build-native BUILD_PROFILE=native PREFIX=$(PREFIX) all
+	$(CMAKE) --build build-native --parallel
+	ctest --test-dir build-native --output-on-failure
+
+install-native: native
+	$(CMAKE) --install build-native --component Runtime
+
+deb:
+	bash packaging/build-deb.sh
+
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -rf $(BUILD_DIR) build-native build-package dist
 	rm -f egypt
