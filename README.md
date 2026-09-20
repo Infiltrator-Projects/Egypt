@@ -43,6 +43,23 @@ make
 ./build/egypt
 ```
 
+Linux has two explicit install paths from that same source graph:
+
+```text
+# Generic distributable Debian package
+make deb
+
+# Hardware-native source build, test and install
+make native
+sudo make install-native PREFIX=/usr
+```
+
+The generic package is written to `dist/egypt_<version>_<arch>.deb`. The
+native profile enables local CPU tuning while the generic profile deliberately
+does not. Menu and HUD artwork are reconstructed deterministically during the
+build and installed under the application's data directory, so an installed
+Egypt binary does not depend on a checkout's `build/assets` directory.
+
 ## Initial playable target
 
 **Place road → establish housing → place clay pit → move clay → make pottery → store/distribute pottery → deliver pottery to houses → houses improve.**
