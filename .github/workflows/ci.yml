@@ -37,13 +37,52 @@ jobs:
       - name: Install X11 host-adapter headers
         run: |
           sudo apt-get update
-          sudo apt-get install -y libx11-dev
+          sudo apt-get install -y dpkg-dev libx11-dev
 
-      - name: Configure X11 host adapter
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DEGYPT_HOST_BACKEND=x11
+      - name: Configure generic X11 host adapter
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DEGYPT_HOST_BACKEND=x11 -DEGYPT_BUILD_PROFILE=generic
 
       - name: Build
         run: cmake --build build --parallel
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+      - name: Verify generic Debian package
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash packaging/build-deb.sh build-package dist
+          deb="dist/egypt_0.1.0_amd64.deb"
+          test -s "$deb"
+          test "$(dpkg-deb -f "$deb" Package)" = "egypt"
+          dpkg-deb --fsys-tarfile "$deb" | tar -tf - > package-files.txt
+          grep -qx './usr/bin/egypt' package-files.txt
+          grep -qx './usr/share/egypt/assets/menu.e16' package-files.txt
+          grep -qx './usr/share/egypt/assets/hud_chrome.e8p' package-files.txt
+          grep -qx './usr/share/egypt/assets/hud_glyphs.e8p' package-files.txt
+          grep -qx './usr/share/egypt/assets/tool_icons.e8p' package-files.txt
+
+      - name: Verify hardware-native source install
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build-native \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -DEGYPT_HOST_BACKEND=x11 \
+            -DEGYPT_BUILD_PROFILE=native
+          cmake --build build-native --parallel
+          ctest --test-dir build-native --output-on-failure
+          rm -rf native-stage
+          DESTDIR="$PWD/native-stage" cmake --install build-native --component Runtime
+          test -x native-stage/usr/bin/egypt
+          test -s native-stage/usr/share/egypt/assets/menu.e16
+          test -s native-stage/usr/share/egypt/assets/hud_chrome.e8p
+
+      - name: Upload generic Debian package
+        uses: actions/upload-artifact@v4
+        with:
+          name: egypt-linux-amd64
+          path: dist/egypt_0.1.0_amd64.deb
+          if-no-files-found: error
