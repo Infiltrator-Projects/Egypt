@@ -5,6 +5,7 @@
 - First packaged Linux release with a generic amd64 Debian package and native source-build installation path.
 - Publish the same tested source graph through CI, GitHub Releases and the Infiltrator APT repository.
 - The release workflow now consumes the exported VERSION consistently across package, checksum and release steps.
+- Release artifact filenames use explicit shell-variable bracing so source/checksum publication is deterministic.
 
 This file records user-visible, compatibility, architecture and validation changes for Egypt.
 
