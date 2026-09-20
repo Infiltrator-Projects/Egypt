@@ -4,9 +4,9 @@
     void ensure_hud_graphics() {
         if (hud_graphics_attempted_) return;
         hud_graphics_attempted_ = true;
-        hud_chrome_ = common::load_e8pa("build/assets/hud_chrome.e8p");
-        hud_glyphs_ = common::load_e8pa("build/assets/hud_glyphs.e8p");
-        tool_icons_ = common::load_e8pa("build/assets/tool_icons.e8p");
+        hud_chrome_ = common::load_e8pa(common::runtime_asset_path("hud_chrome.e8p"));
+        hud_glyphs_ = common::load_e8pa(common::runtime_asset_path("hud_glyphs.e8p"));
+        tool_icons_ = common::load_e8pa(common::runtime_asset_path("tool_icons.e8p"));
         if (!hud_chrome_.valid() || !hud_glyphs_.valid() || !tool_icons_.valid()) {
             std::cerr << "Egypt: authored graphical UI surfaces failed to load\n";
         }
