@@ -1,0 +1,42 @@
+name: Normalize copyright start year
+
+on:
+  push:
+    paths:
+      - .github/workflows/copyright-1993-normalize.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  normalize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Replace copyright start year
+        shell: bash
+        run: |
+          set -euo pipefail
+          old='2000''-2026'
+          new='1993''-2026'
+          mapfile -d '' files < <(git grep -Ilz "$old" -- . ':!.github/workflows/copyright-1993-normalize.yml' || true)
+          if (("${#files[@]}" == 0)); then
+            echo "No tracked text files require updating."
+            exit 0
+          fi
+          for file in "${files[@]}"; do
+            sed -i "s/${old}/${new}/g" "$file"
+          done
+          git config user.name "Infiltrator Projects Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add -- "${files[@]}"
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "Update copyright start year to 1993"
+          git push origin HEAD:main
