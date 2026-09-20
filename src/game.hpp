@@ -1,6 +1,7 @@
 #pragma once
 #include "ui_core.hpp"
 #include "common/raw_image.hpp"
+#include "common/runtime_paths.hpp"
 
 namespace egypt {
 
