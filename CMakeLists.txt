@@ -21,14 +21,14 @@ elseif(NOT EGYPT_BUILD_PROFILE STREQUAL "generic")
 endif()
 
 # Use the canonical shared Infiltratr Common release. Pin the exact reviewed
-# Common 1.16.0 commit so Egypt builds reproducibly and cannot silently drift.
+# Common 1.19.35 commit so Egypt builds reproducibly and cannot silently drift.
 set(INFILTRATR_COMMON_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(INFILTRATR_COMMON_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
 set(INFILTRATR_COMMON_BUILD_SHARED OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
     InfiltratrCommon
     GIT_REPOSITORY https://github.com/Infiltrator-Projects/Infiltrator-Libraries.git
-    GIT_TAG a9db06b11f493c4e6f42bf6c13cc5cc5c73e1fc4
+    GIT_TAG 7cc5de3de0e94ed2cfcff0840bbb5346eb5c9c9f
 )
 FetchContent_MakeAvailable(InfiltratrCommon)
 
