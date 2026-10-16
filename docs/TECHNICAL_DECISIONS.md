@@ -82,13 +82,13 @@ Initial rendering rules:
 - arbitrary 3D camera rotation is not part of the initial design;
 - future elevation is allowed without replacing the world model.
 
-## TD-006 — Reuse Infiltratr Common before inventing local infrastructure
+## TD-006 — Reuse Libraries before inventing local infrastructure
 
 **Date:** 2026-09-12
 
 **Status:** DECIDED
 
-Egypt must use the shared Infiltratr Common library where Common already provides a suitable implementation. Game-specific code remains in Egypt; generally reusable primitives belong in Common.
+Egypt must use the shared Libraries library where Common already provides a suitable implementation. Game-specific code remains in Egypt; generally reusable primitives belong in Common.
 
 Egypt currently pins Common 1.16.0. The first simulation loop uses Common's exact fixed-step scheduler rather than inventing a private accumulator.
 

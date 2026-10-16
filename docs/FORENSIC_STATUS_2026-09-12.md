@@ -8,7 +8,7 @@ Where this file conflicts with older documents that still mark a decision as TBD
 
 - Native C++20 game code.
 - Custom engine/runtime rather than Godot or another third-party game engine.
-- Infiltratr Common **1.16.0**, pinned to the reviewed release commit, is used for genuinely reusable infrastructure.
+- Libraries **1.16.0**, pinned to the reviewed release commit, is used for genuinely reusable infrastructure.
 - Simulation remains authoritative and testable without rendering.
 - Current Linux presentation backend is X11; renderer/platform backends may be replaced later without changing simulation rules.
 - Main gameplay presentation is **2.5D isometric** over a logical 2D simulation grid.

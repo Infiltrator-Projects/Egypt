@@ -189,7 +189,7 @@ Immediate order:
 
 ## 12. Common library rule
 
-Egypt uses **Infiltratr Common 1.16.0** for genuinely reusable infrastructure. Game-specific road topology, housing rules, resource chains and agent semantics remain in Egypt unless/until they become genuinely reusable across projects. Do not duplicate functionality already present in Common, but do not force Egypt-specific game logic into Common merely to claim reuse.
+Egypt uses **Libraries 1.16.0** for genuinely reusable infrastructure. Game-specific road topology, housing rules, resource chains and agent semantics remain in Egypt unless/until they become genuinely reusable across projects. Do not duplicate functionality already present in Common, but do not force Egypt-specific game logic into Common merely to claim reuse.
 
 ## 13. Guardrail
 

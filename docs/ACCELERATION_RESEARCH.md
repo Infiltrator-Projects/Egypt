@@ -4,7 +4,7 @@ Status: **Reference-only research**
 
 Purpose: use existing public projects to identify proven architecture and implementation patterns that can accelerate Egypt without quietly changing the project's engine/licensing decisions.
 
-No external project code listed here has been copied into Egypt by this research pass. The useful ideas are being reimplemented in Egypt or Infiltratr Common.
+No external project code listed here has been copied into Egypt by this research pass. The useful ideas are being reimplemented in Egypt or Libraries.
 
 ## ProcIsoCity
 
@@ -80,7 +80,7 @@ The research supports the following immediate implementation plan:
 5. Separate terrain, structures, moving agents and overlays into layers as the renderer grows.
 6. Keep simulation independent of the renderer so it can later run headless/tests.
 7. Start with deterministic procedural terrain so gameplay systems can be exercised immediately without waiting for a map editor.
-8. Use Infiltratr Common for reusable timing/math/platform primitives before writing local equivalents.
+8. Use Libraries for reusable timing/math/platform primitives before writing local equivalents.
 9. Build the smallest complete city interaction loop first, then extend it into the clay-to-pottery vertical slice.
 
 ## Immediate speed-run target
@@ -98,6 +98,6 @@ The next executable milestone is no longer a static city placeholder. `New Game`
 - bulldozing;
 - treasury costs;
 - houses gaining population only when they have road access;
-- a fixed-step simulation driven by Infiltratr Common.
+- a fixed-step simulation driven by Libraries.
 
 That gives Egypt a real playable world shell on which the pottery logistics chain can be built next.
