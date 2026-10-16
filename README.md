@@ -103,3 +103,5 @@ The repository documentation is deliberately split by purpose so later developme
 - Earlier settlements should be able to matter in the wider dynasty/campaign where practical.
 - Egypt is an original game, not a Pharaoh compatibility project.
 - Ibis — the Egyptian bin chickens — are staying.
+
+Build and release identity is authoritative in [VERSION](VERSION). See [Validation](docs/VALIDATION.md) for package qualification and immutable publication.

@@ -5,16 +5,19 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 build_dir="${1:-$root/build-package}"
 dist_dir="${2:-$root/dist}"
-version="$(sed -n 's/^project(Egypt VERSION \([^ ]*\) LANGUAGES C CXX)$/\1/p' "$root/CMakeLists.txt")"
+version="$(tr -d '\r\n' < "$root/VERSION")"
 arch="$(dpkg --print-architecture)"
 
-[[ -n "$version" ]] || { echo "Unable to determine Egypt version" >&2; exit 1; }
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Unable to determine Egypt version" >&2; exit 1; }
 command -v cmake >/dev/null
 command -v dpkg-deb >/dev/null
 command -v python3 >/dev/null
 
-rm -rf "$build_dir"
 mkdir -p "$build_dir" "$dist_dir"
+build_dir="$(cd "$build_dir" && pwd)"
+dist_dir="$(cd "$dist_dir" && pwd)"
+SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(git -C "$root" log -1 --format=%ct)}"
+export SOURCE_DATE_EPOCH
 
 cmake -S "$root" -B "$build_dir" \
     -DCMAKE_BUILD_TYPE=Release \

@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 cmake_minimum_required(VERSION 3.20)
 
-project(Egypt VERSION 0.1.0 LANGUAGES C CXX)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" PRODUCT_VERSION)
+string(STRIP "${PRODUCT_VERSION}" PRODUCT_VERSION)
+project(Egypt VERSION "${PRODUCT_VERSION}" LANGUAGES C CXX)
 
 include(CTest)
 include(FetchContent)

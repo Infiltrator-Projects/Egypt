@@ -38,3 +38,7 @@ Keep platform handles/toolkit details out of domain contracts where practical. K
 - docs/PHARAOH_FORENSIC_REFERENCE.md
 - docs/GRAPHICAL_SCREEN_ARCHITECTURE.md
 - docs/WILDLIFE_SIMULATION.md
+
+## Build and release boundary
+
+VERSION owns product identity. CMake owns target membership and the immutable Common dependency. Packaging owns generic build/test/staging; CI qualifies platform variants and preserves their output. The publisher owns promotion of sealed artifacts and performs no compilation. The central repository independently discovers public releases.

@@ -23,3 +23,11 @@ The exact revision intended for release must satisfy its required automated chec
 ## Regression rule
 
 Reproducible defects should become permanent tests at the narrowest useful layer. As the product grows, validation should grow with the owned behaviour rather than becoming a separate afterthought.
+
+## Build and publication ownership
+
+Root VERSION owns source and package identity. The packaging script configures, builds and tests the generic package; CI separately qualifies the native profile and window-system-free core. Packaging reuses a valid build directory without deleting an arbitrary caller-supplied path.
+
+The successful CI run seals the Debian package, exact Git source archive and commit identity with SHA-256. Publication downloads that run's artifact and compares remote bytes before and after draft promotion. Public tags and assets are immutable; advancing VERSION is the release signal. Commit subjects carry no control-plane meaning.
+
+The source build retrieves Common at the exact commit recorded in CMake. Initial configuration therefore needs network access unless that dependency is already materialised. Human playtesting remains separate from automated core/package qualification.

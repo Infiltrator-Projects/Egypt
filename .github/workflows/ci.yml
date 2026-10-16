@@ -12,7 +12,7 @@ jobs:
       PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
 
       - name: Validate authored graphical UI surfaces
         run: |
@@ -36,7 +36,7 @@ jobs:
       PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
 
       - name: Install X11 host-adapter headers
         if: runner.environment == 'github-hosted'
@@ -54,21 +54,13 @@ jobs:
           done
           pkg-config --exists x11
 
-      - name: Configure generic X11 host adapter
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DEGYPT_HOST_BACKEND=x11 -DEGYPT_BUILD_PROFILE=generic
-
-      - name: Build
-        run: cmake --build build --parallel
-
-      - name: Test
-        run: ctest --test-dir build --output-on-failure
-
       - name: Verify generic Debian package
         shell: bash
         run: |
           set -euo pipefail
           bash packaging/build-deb.sh build-package dist
-          deb="dist/egypt_0.1.0_amd64.deb"
+          version="$(tr -d '\r\n' < VERSION)"
+          deb="dist/egypt_${version}_amd64.deb"
           test -s "$deb"
           test "$(dpkg-deb -f "$deb" Package)" = "egypt"
           dpkg-deb --fsys-tarfile "$deb" | tar -tf - > package-files.txt
@@ -95,10 +87,18 @@ jobs:
           test -s native-stage/usr/share/egypt/assets/menu.e16
           test -s native-stage/usr/share/egypt/assets/hud_chrome.e8p
 
-      - name: Upload generic Debian package
-        uses: actions/upload-artifact@v4
+      - name: Seal qualified package and source
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(tr -d '\r\n' < VERSION)
+          git archive --format=tar --prefix="egypt-$version/" HEAD | gzip -n > "dist/egypt_${version}_source.tar.gz"
+          printf '%s\n' "$GITHUB_SHA" > dist/SOURCE_COMMIT
+          (cd dist && sha256sum *.deb *.tar.gz SOURCE_COMMIT > SHA256SUMS.txt)
+      - name: Preserve qualified release bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: egypt-linux-amd64
-          path: dist/egypt_0.1.0_amd64.deb
+          name: egypt-qualified-${{ github.sha }}
+          path: dist/*
           if-no-files-found: error
-
+          retention-days: 14
