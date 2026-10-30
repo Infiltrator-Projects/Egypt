@@ -56,7 +56,7 @@ sudo make install-native PREFIX=/usr
 
 The generic package is written to `dist/egypt_<version>_<arch>.deb`. The
 native profile enables local CPU tuning while the generic profile deliberately
-does not. Menu and HUD artwork are reconstructed deterministically during the
+does not. Menu and HUD artwork are reconstructed deterministically by a native C++20 build tool (zlib, liblzma and OpenSSL Crypto development libraries required; Python not required) during the
 build and installed under the application's data directory, so an installed
 Egypt binary does not depend on a checkout's `build/assets` directory.
 

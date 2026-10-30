@@ -8,7 +8,15 @@ project(Egypt VERSION "${PRODUCT_VERSION}" LANGUAGES C CXX)
 include(CTest)
 include(FetchContent)
 include(GNUInstallDirs)
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
+find_package(ZLIB REQUIRED)
+find_package(LibLZMA REQUIRED)
+find_package(OpenSSL REQUIRED COMPONENTS Crypto)
+
+# Standalone build-time utility; artwork remains authored, not rendered.
+add_executable(egypt-asset-builder tools/asset_builder.cpp)
+target_compile_features(egypt-asset-builder PRIVATE cxx_std_20)
+set_target_properties(egypt-asset-builder PROPERTIES CXX_EXTENSIONS OFF)
+target_link_libraries(egypt-asset-builder PRIVATE ZLIB::ZLIB LibLZMA::LibLZMA OpenSSL::Crypto)
 
 set(EGYPT_BUILD_PROFILE "generic" CACHE STRING
     "Build profile: generic for distributable packages, native for this machine")
@@ -48,11 +56,11 @@ set(EGYPT_HUD_SOURCES
 add_custom_command(
     OUTPUT "${EGYPT_ASSET_DIR}/menu.e16"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${EGYPT_ASSET_DIR}"
-    COMMAND "${Python3_EXECUTABLE}"
-            "${CMAKE_CURRENT_SOURCE_DIR}/tools/build_menu_asset.py"
-            "${EGYPT_ASSET_DIR}/menu.e16"
+    COMMAND "$<TARGET_FILE:egypt-asset-builder>"
+            menu "${CMAKE_CURRENT_SOURCE_DIR}" "${EGYPT_ASSET_DIR}/menu.e16"
     DEPENDS
-        "${CMAKE_CURRENT_SOURCE_DIR}/tools/build_menu_asset.py"
+        egypt-asset-builder
+        "${CMAKE_CURRENT_SOURCE_DIR}/tools/asset_builder.cpp"
         ${EGYPT_MENU_PARTS}
     VERBATIM)
 
@@ -62,11 +70,11 @@ add_custom_command(
         "${EGYPT_ASSET_DIR}/hud_glyphs.e8p"
         "${EGYPT_ASSET_DIR}/tool_icons.e8p"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${EGYPT_ASSET_DIR}"
-    COMMAND "${Python3_EXECUTABLE}"
-            "${CMAKE_CURRENT_SOURCE_DIR}/tools/build_hud_assets.py"
-            "${EGYPT_ASSET_DIR}"
+    COMMAND "$<TARGET_FILE:egypt-asset-builder>"
+            hud "${CMAKE_CURRENT_SOURCE_DIR}" "${EGYPT_ASSET_DIR}"
     DEPENDS
-        "${CMAKE_CURRENT_SOURCE_DIR}/tools/build_hud_assets.py"
+        egypt-asset-builder
+        "${CMAKE_CURRENT_SOURCE_DIR}/tools/asset_builder.cpp"
         ${EGYPT_HUD_SOURCES}
     VERBATIM)
 

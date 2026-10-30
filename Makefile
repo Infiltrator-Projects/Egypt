@@ -2,42 +2,23 @@ SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 
 CMAKE ?= cmake
-PYTHON ?= python3
 BUILD_DIR ?= build
 BUILD_TYPE ?= Release
 PREFIX ?= /usr/local
 BUILD_PROFILE ?= generic
 
 TARGET := $(BUILD_DIR)/egypt
-MENU_ASSET := $(BUILD_DIR)/assets/menu.e16
-MENU_PARTS := $(sort $(wildcard assets/menu_q20_xz_*.b64))
-MENU_BUILDER := tools/build_menu_asset.py
-HUD_STAMP := $(BUILD_DIR)/assets/.hud-art.stamp
-HUD_BUILDER := tools/build_hud_assets.py
-HUD_SOURCES := assets/hud_chrome_authored.e8p.b85 assets/hud_glyphs_authored.e8p.b85 assets/tool_icons_authored.e8p.b85
 
 .PHONY: all configure run clean menu-asset hud-assets native install-native deb
 
 all: configure
 	$(CMAKE) --build $(BUILD_DIR) --parallel
 
-menu-asset: $(MENU_ASSET)
-hud-assets: $(HUD_STAMP)
+# Both authored artwork stages are built natively by CMake, never Python.
+menu-asset hud-assets: configure
+	$(CMAKE) --build $(BUILD_DIR) --target egypt-runtime-assets --parallel
 
-$(MENU_ASSET): $(MENU_PARTS) $(MENU_BUILDER)
-	@printf 'Preparing verified 640x360 Egypt menu artwork...\n'
-	@$(PYTHON) $(MENU_BUILDER) $(MENU_ASSET)
-
-$(HUD_STAMP): $(HUD_BUILDER) $(HUD_SOURCES)
-	@printf 'Installing authored Egypt HUD artwork...\n'
-	@mkdir -p $(BUILD_DIR)/assets
-	@$(PYTHON) $(HUD_BUILDER) $(BUILD_DIR)/assets
-	@test "$$(head -c 4 $(BUILD_DIR)/assets/hud_chrome.e8p)" = "E8PA" || { echo 'Egypt HUD chrome failed to install'; exit 1; }
-	@test "$$(head -c 4 $(BUILD_DIR)/assets/hud_glyphs.e8p)" = "E8PA" || { echo 'Egypt HUD glyph artwork failed to install'; exit 1; }
-	@test "$$(head -c 4 $(BUILD_DIR)/assets/tool_icons.e8p)" = "E8PA" || { echo 'Egypt tool artwork failed to install'; exit 1; }
-	@touch $(HUD_STAMP)
-
-configure: $(MENU_ASSET) $(HUD_STAMP)
+configure:
 	$(CMAKE) -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) \
 		-DEGYPT_BUILD_PROFILE=$(BUILD_PROFILE) -DCMAKE_INSTALL_PREFIX=$(PREFIX)
 

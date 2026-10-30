@@ -16,10 +16,12 @@ jobs:
 
       - name: Validate authored graphical UI surfaces
         run: |
-          python3 tools/build_hud_assets.py build-ui
-          printf '%s  %s\n' 'd16206ec528caa645a5f70ca2b24020c47304d6f00e823b0690c373605609218' 'build-ui/hud_chrome.e8p' | sha256sum -c -
-          printf '%s  %s\n' 'ebe86b2076ca98cd2bf09d14aa8ab857d6bceea384074c65b0bbcfe7ff6eb25f' 'build-ui/hud_glyphs.e8p' | sha256sum -c -
-          printf '%s  %s\n' 'a90d9a515e9613e4e4e13b6b61592d115de89ec44375313b669741a9f5df3c14' 'build-ui/tool_icons.e8p' | sha256sum -c -
+          cmake -S . -B build-ui -DCMAKE_BUILD_TYPE=Release -DEGYPT_HOST_BACKEND=none
+          cmake --build build-ui --target egypt-runtime-assets --parallel
+          printf '%s  %s\n' 'e22ea3d3689495f83b6bd31437806ff897fff530f3d8420579f142bd3a1337c9' 'build-ui/assets/menu.e16' | sha256sum -c -
+          printf '%s  %s\n' 'd16206ec528caa645a5f70ca2b24020c47304d6f00e823b0690c373605609218' 'build-ui/assets/hud_chrome.e8p' | sha256sum -c -
+          printf '%s  %s\n' 'ebe86b2076ca98cd2bf09d14aa8ab857d6bceea384074c65b0bbcfe7ff6eb25f' 'build-ui/assets/hud_glyphs.e8p' | sha256sum -c -
+          printf '%s  %s\n' 'a90d9a515e9613e4e4e13b6b61592d115de89ec44375313b669741a9f5df3c14' 'build-ui/assets/tool_icons.e8p' | sha256sum -c -
 
       - name: Configure without host backend
         run: cmake -S . -B build-core -DCMAKE_BUILD_TYPE=Release -DEGYPT_HOST_BACKEND=none
@@ -42,17 +44,17 @@ jobs:
         if: runner.environment == 'github-hosted'
         run: |
           sudo apt-get update
-          sudo apt-get install -y dpkg-dev libx11-dev
+          sudo apt-get install -y dpkg-dev libx11-dev zlib1g-dev liblzma-dev libssl-dev
 
       - name: Verify self-hosted X11 dependencies
         if: runner.environment == 'self-hosted'
         shell: bash
         run: |
           set -euo pipefail
-          for command_name in cmake ctest dpkg-deb pkg-config python3; do
+          for command_name in cmake ctest dpkg-deb pkg-config c++; do
             command -v "$command_name" >/dev/null 2>&1 || exit 1
           done
-          pkg-config --exists x11
+          pkg-config --exists x11 zlib liblzma openssl
 
       - name: Verify generic Debian package
         shell: bash

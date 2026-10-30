@@ -11,7 +11,6 @@ arch="$(dpkg --print-architecture)"
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Unable to determine Egypt version" >&2; exit 1; }
 command -v cmake >/dev/null
 command -v dpkg-deb >/dev/null
-command -v python3 >/dev/null
 
 mkdir -p "$build_dir" "$dist_dir"
 build_dir="$(cd "$build_dir" && pwd)"
