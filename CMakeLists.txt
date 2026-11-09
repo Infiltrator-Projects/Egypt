@@ -143,8 +143,17 @@ if(BUILD_TESTING)
     target_include_directories(egypt-world-smoke PRIVATE src)
     target_compile_features(egypt-world-smoke PRIVATE cxx_std_20)
     set_target_properties(egypt-world-smoke PROPERTIES CXX_EXTENSIONS OFF)
+    add_executable(egypt-image-decoder-test
+        tests/image_decoder_test.cpp
+        src/common/image.cpp
+    )
+    target_include_directories(egypt-image-decoder-test PRIVATE src)
+    target_compile_features(egypt-image-decoder-test PRIVATE cxx_std_20)
+    set_target_properties(egypt-image-decoder-test PROPERTIES CXX_EXTENSIONS OFF)
+
     add_test(NAME egypt-world-smoke COMMAND egypt-world-smoke)
     add_test(NAME egypt-game-core-compile COMMAND egypt-game-core-compile)
+    add_test(NAME egypt-image-decoder COMMAND egypt-image-decoder-test)
 endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
@@ -154,5 +163,6 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     target_compile_options(egypt-game-core-compile PRIVATE -Wall -Wextra -Wpedantic)
     if(BUILD_TESTING)
         target_compile_options(egypt-world-smoke PRIVATE -Wall -Wextra -Wpedantic)
+        target_compile_options(egypt-image-decoder-test PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 endif()
