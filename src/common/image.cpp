@@ -45,6 +45,9 @@ bool read_svarint(const std::uint8_t*& p, const std::uint8_t* end, int& out) {
     std::uint32_t z=0; unsigned shift=0;
     while (p < end && shift <= 28U) {
         const std::uint8_t byte=*p++;
+        // The fifth byte of a 32-bit varint may carry only four data bits.
+        // Reject wider values instead of silently truncating their high bits.
+        if (shift == 28U && (byte & 0x70U) != 0U) return false;
         z |= static_cast<std::uint32_t>(byte & 0x7fU) << shift;
         if ((byte & 0x80U)==0) {
             const std::int32_t v = static_cast<std::int32_t>((z >> 1U) ^ (0U - (z & 1U)));
@@ -76,10 +79,10 @@ bool decode_plane(const std::uint8_t* begin,const std::uint8_t* end,int w,int h,
         for(int x=0;x<8;++x) C[u][x]=a*std::cos(pi*(2*x+1)*u/16.0);
     }
     const std::uint8_t* ptr=begin;
-    int prevdc=0;
+    std::int64_t prevdc=0;
     for(int by=0;by<ph;by+=8){
       for(int bx=0;bx<pw;bx+=8){
-        int vals[64]{};
+        std::int64_t vals[64]{};
         int dcdiff=0;
         if(!read_svarint(ptr,end,dcdiff)) return false;
         prevdc += dcdiff; vals[0]=prevdc;
@@ -98,7 +101,9 @@ bool decode_plane(const std::uint8_t* begin,const std::uint8_t* end,int w,int h,
         double f[8][8]{};
         for(int i=0;i<64;++i){
             const int pos=kZigZag[i];
-            f[pos/8][pos%8]=static_cast<double>(vals[i]*qt[pos]);
+            // Dequantize in floating point: a malformed coefficient can
+            // exceed int32 when multiplied by a valid quantizer value.
+            f[pos/8][pos%8]=static_cast<double>(vals[i])*qt[pos];
         }
         double tmp[8][8]{};
         for(int x=0;x<8;++x) for(int v=0;v<8;++v)
