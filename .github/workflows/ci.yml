@@ -27,7 +27,7 @@ jobs:
         run: cmake -S . -B build-core -DCMAKE_BUILD_TYPE=Release -DEGYPT_HOST_BACKEND=none
 
       - name: Build platform-neutral game core
-        run: cmake --build build-core --target egypt-game-core-compile egypt-world-smoke --parallel
+        run: cmake --build build-core --target egypt-game-core-compile egypt-world-smoke egypt-image-decoder-test --parallel
 
       - name: Test platform-neutral core
         run: ctest --test-dir build-core --output-on-failure
