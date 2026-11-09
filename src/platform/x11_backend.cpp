@@ -12,6 +12,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
+#include <limits>
 #include <stdexcept>
 #include <thread>
 
@@ -56,6 +57,7 @@ public:
         display_ = XOpenDisplay(nullptr);
         if (!display_) throw std::runtime_error("Unable to open X11 host display");
 
+        try {
         screen_ = DefaultScreen(display_);
         window_ = XCreateSimpleWindow(
             display_, RootWindow(display_, screen_), 100, 100,
@@ -81,18 +83,13 @@ public:
         const std::uint64_t start = now_ns();
         infiltratr_fixed_step_reset(&scheduler_, start);
         last_frame_ns_ = start;
+        } catch (...) {
+            close_resources();
+            throw;
+        }
     }
 
-    ~X11Host() {
-        if (image_) {
-            std::free(image_->data);
-            image_->data = nullptr;
-            XDestroyImage(image_);
-        }
-        if (gc_) XFreeGC(display_, gc_);
-        if (window_) XDestroyWindow(display_, window_);
-        if (display_) XCloseDisplay(display_);
-    }
+    ~X11Host() { close_resources(); }
 
     int run() {
         constexpr std::uint64_t kPresentIntervalNs = 1000000000ULL / 60ULL;
@@ -128,6 +125,15 @@ public:
     }
 
 private:
+    // A throwing constructor does not run the class destructor.
+    // The same cleanup path therefore handles partial initialisation.
+    void close_resources() noexcept {
+        if (image_) { XDestroyImage(image_); image_ = nullptr; }
+        if (gc_) { XFreeGC(display_, gc_); gc_ = nullptr; }
+        if (window_) { XDestroyWindow(display_, window_); window_ = 0; }
+        if (display_) { XCloseDisplay(display_); display_ = nullptr; }
+    }
+
     Display* display_ = nullptr;
     int screen_ = 0;
     Window window_ = 0;
@@ -207,17 +213,31 @@ private:
     }
 
     void recreate_image(int width, int height) {
-        if (image_) {
-            std::free(image_->data);
-            image_->data = nullptr;
-            XDestroyImage(image_);
-            image_ = nullptr;
+        if (width <= 0 || height <= 0) {
+            throw std::invalid_argument("X11 presentation dimensions must be positive");
         }
-        image_ = XCreateImage(display_, DefaultVisual(display_, screen_), DefaultDepth(display_, screen_),
+        XImage* replacement = XCreateImage(
+            display_, DefaultVisual(display_, screen_), DefaultDepth(display_, screen_),
             ZPixmap, 0, nullptr, width, height, 32, 0);
-        if (!image_) throw std::runtime_error("Unable to create X11 presentation image");
-        image_->data = static_cast<char*>(std::calloc(static_cast<std::size_t>(image_->bytes_per_line) * height, 1));
-        if (!image_->data) throw std::bad_alloc();
+        if (!replacement) throw std::runtime_error("Unable to create X11 presentation image");
+
+        const std::size_t rows = static_cast<std::size_t>(height);
+        if (replacement->bytes_per_line <= 0 ||
+            static_cast<std::size_t>(replacement->bytes_per_line) >
+                std::numeric_limits<std::size_t>::max() / rows) {
+            XDestroyImage(replacement);
+            throw std::overflow_error("X11 presentation image size overflow");
+        }
+        replacement->data = static_cast<char*>(
+            std::calloc(static_cast<std::size_t>(replacement->bytes_per_line) * rows, 1));
+        if (!replacement->data) {
+            XDestroyImage(replacement);
+            throw std::bad_alloc();
+        }
+
+        // Keep the previous allocation intact until the replacement is ready.
+        if (image_) XDestroyImage(image_);
+        image_ = replacement;
         rebuild_colour_tables();
     }
 
