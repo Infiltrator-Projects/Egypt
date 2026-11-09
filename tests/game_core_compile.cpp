@@ -4,6 +4,7 @@
 
 static_assert(std::is_class_v<egypt::Game>);
 static_assert(std::is_class_v<egypt::Framebuffer>);
+static_assert(std::is_same_v<decltype(&egypt::Game::on_focus_lost), void (egypt::Game::*)()>);
 static_assert(std::is_enum_v<egypt::Key>);
 static_assert(std::is_enum_v<egypt::MouseButton>);
 

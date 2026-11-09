@@ -101,6 +101,14 @@ public:
         set_pan_key(key, false);
     }
 
+    // A window switch may happen before X11 delivers the matching key/button
+    // releases. Never let those stale inputs keep panning or dragging.
+    void on_focus_lost() {
+        pan_left_ = pan_right_ = pan_up_ = pan_down_ = false;
+        dragging_ = false;
+        dirty_ = true;
+    }
+
     void on_motion(int x, int y) {
         const int oldx = hover_x_, oldy = hover_y_;
         if (dragging_) {

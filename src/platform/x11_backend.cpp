@@ -66,7 +66,7 @@ public:
             0, BlackPixel(display_, screen_), BlackPixel(display_, screen_));
         XStoreName(display_, window_, "Egypt");
         XSelectInput(display_, window_, ExposureMask | KeyPressMask | KeyReleaseMask |
-            ButtonPressMask | ButtonReleaseMask | PointerMotionMask | StructureNotifyMask);
+            ButtonPressMask | ButtonReleaseMask | PointerMotionMask | StructureNotifyMask | FocusChangeMask);
 
         Bool detectable = False;
         XkbSetDetectableAutoRepeat(display_, True, &detectable);
@@ -184,6 +184,9 @@ private:
                     break;
                 case ButtonRelease:
                     game_.on_button_release(map_button(event.xbutton.button), event.xbutton.x, event.xbutton.y);
+                    break;
+                case FocusOut:
+                    game_.on_focus_lost();
                     break;
                 case KeyPress:
                     game_.on_key_press(map_key(XLookupKeysym(&event.xkey, 0)));
